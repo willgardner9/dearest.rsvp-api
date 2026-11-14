@@ -36,6 +36,7 @@ use crate::{
 };
 
 const INVITE_DAYS: i64 = 7;
+const UPSERT_ATTEMPTS: usize = 3;
 
 /// Routes under `/tenants`: the invites of one tenant. A member calls them.
 pub fn tenant_routes() -> Router<AppState> {
@@ -84,13 +85,15 @@ async fn create_invite(
 
     // Two requests at the same time can both try to insert. The partial unique
     // index stops one of them, and that one then takes the replace path.
+    let mut upserted = None;
+    for _ in 0..UPSERT_ATTEMPTS {
+        upserted = upsert_invite(&state, tenant.id, member.session.user.id, &email).await?;
+        if upserted.is_some() {
+            break;
+        }
+    }
     let (invite, token) =
-        match upsert_invite(&state, tenant.id, member.session.user.id, &email).await? {
-            Some(done) => done,
-            None => upsert_invite(&state, tenant.id, member.session.user.id, &email)
-                .await?
-                .ok_or_else(|| AppError::Internal(anyhow::anyhow!("invite insert conflict")))?,
-        };
+        upserted.ok_or_else(|| AppError::Internal(anyhow::anyhow!("invite insert conflict")))?;
 
     let link = format!("{}/invite/{token}", state.config.app_base_url);
     spawn_send(
@@ -231,24 +234,26 @@ async fn find_open_invite(
     query.one(db).await?.ok_or(AppError::NotFound)
 }
 
+async fn account_exists(db: &impl ConnectionTrait, email: &str) -> Result<bool, sea_orm::DbErr> {
+    Ok(users::Entity::find()
+        .filter(users::Column::Email.eq(email))
+        .one(db)
+        .await?
+        .is_some())
+}
+
 async fn preview(
     State(state): State<AppState>,
     Path(token): Path<String>,
 ) -> AppResult<Json<Value>> {
     let invite = find_open_invite(&state.db, &token, false).await?;
-    let tenant = tenants::Entity::find_by_id(invite.tenant_id)
-        .one(&state.db)
-        .await?
-        .ok_or(AppError::NotFound)?;
-    let inviter = users::Entity::find_by_id(invite.invited_by)
-        .one(&state.db)
-        .await?
-        .ok_or(AppError::NotFound)?;
-    let account_exists = users::Entity::find()
-        .filter(users::Column::Email.eq(invite.email.as_str()))
-        .one(&state.db)
-        .await?
-        .is_some();
+    let (tenant, inviter, account_exists) = tokio::try_join!(
+        tenants::Entity::find_by_id(invite.tenant_id).one(&state.db),
+        users::Entity::find_by_id(invite.invited_by).one(&state.db),
+        account_exists(&state.db, &invite.email),
+    )?;
+    let tenant = tenant.ok_or(AppError::NotFound)?;
+    let inviter = inviter.ok_or(AppError::NotFound)?;
     Ok(Json(json!({
         "tenant_id": tenant.id,
         "tenant_name": tenant.name,
@@ -295,12 +300,7 @@ async fn accept(
         None => {
             // Cheap checks first, so a bad token does not cost a password hash.
             let invite = find_open_invite(&state.db, &token, false).await?;
-            let account_exists = users::Entity::find()
-                .filter(users::Column::Email.eq(invite.email.as_str()))
-                .one(&state.db)
-                .await?
-                .is_some();
-            if account_exists {
+            if account_exists(&state.db, &invite.email).await? {
                 return Err(AppError::Unauthenticated);
             }
             let new_account: NewAccountBody =

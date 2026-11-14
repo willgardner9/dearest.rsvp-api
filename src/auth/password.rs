@@ -32,9 +32,19 @@ fn verify_blocking(password: &str, hash: &str) -> AppResult<bool> {
     }
 }
 
+/// At most this many argon2 jobs run at the same time. Each job uses 19 MiB.
+const MAX_CONCURRENT_HASHES: usize = 8;
+
+static HASH_PERMITS: tokio::sync::Semaphore =
+    tokio::sync::Semaphore::const_new(MAX_CONCURRENT_HASHES);
+
 async fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> AppResult<T> + Send + 'static,
 ) -> AppResult<T> {
+    let _permit = HASH_PERMITS
+        .acquire()
+        .await
+        .map_err(|err| AppError::Internal(err.into()))?;
     tokio::task::spawn_blocking(work)
         .await
         .map_err(|err| AppError::Internal(err.into()))?

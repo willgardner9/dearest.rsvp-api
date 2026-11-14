@@ -41,9 +41,13 @@ pub async fn run_cleanup_once(db: &DatabaseConnection) -> AppResult<CleanupCount
         .await?
         .rows_affected;
     let invites = invites::Entity::delete_many()
-        .filter(
-            invites::Column::ExpiresAt.lt(now - ChronoDuration::days(KEEP_EXPIRED_INVITES_DAYS)),
-        )
+        .filter({
+            let cutoff = now - ChronoDuration::days(KEEP_EXPIRED_INVITES_DAYS);
+            Condition::any()
+                .add(invites::Column::ExpiresAt.lt(cutoff))
+                .add(invites::Column::AcceptedAt.lt(cutoff))
+                .add(invites::Column::CancelledAt.lt(cutoff))
+        })
         .exec(db)
         .await?
         .rows_affected;

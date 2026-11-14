@@ -2,6 +2,7 @@ use crate::error::{AppError, AppResult};
 
 const MAX_EMAIL_LEN: usize = 254;
 const MAX_NAME_LEN: usize = 100;
+pub const MAX_PASSWORD_LEN: usize = 1024;
 
 /// Trim and lowercase an email. Every email input goes through this function.
 pub fn normalize_email(input: &str) -> AppResult<String> {
@@ -12,7 +13,7 @@ pub fn normalize_email(input: &str) -> AppResult<String> {
             (parts.next(), parts.next(), parts.next()),
             (Some(local), Some(domain), None) if !local.is_empty() && !domain.is_empty()
         );
-    if valid {
+    if valid && email.parse::<lettre::Address>().is_ok() {
         Ok(email)
     } else {
         Err(AppError::InvalidInput)
@@ -33,9 +34,9 @@ pub fn validate_name(input: &str) -> AppResult<String> {
     validate_text(input, MAX_NAME_LEN)
 }
 
-/// The only password rule: not empty.
+/// The password rules: not empty, and not more than `MAX_PASSWORD_LEN` bytes.
 pub fn validate_password(input: &str) -> AppResult<()> {
-    if input.is_empty() {
+    if input.is_empty() || input.len() > MAX_PASSWORD_LEN {
         Err(AppError::InvalidInput)
     } else {
         Ok(())

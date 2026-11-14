@@ -38,14 +38,24 @@ pub async fn request_reset(
     if check(&state.limits.reset_email, &email).is_err() {
         return Ok(StatusCode::ACCEPTED);
     }
+    // Do the lookup in the background, so the response time is the same for every email.
+    let task_state = state.clone();
+    state.tasks.spawn(async move {
+        if let Err(err) = send_reset(&task_state, &email).await {
+            tracing::error!("password reset failed: {err:?}");
+        }
+    });
+    Ok(StatusCode::ACCEPTED)
+}
+
+async fn send_reset(state: &AppState, email: &str) -> AppResult<()> {
     let Some(user) = users::Entity::find()
         .filter(users::Column::Email.eq(email))
         .one(&state.db)
         .await?
     else {
-        return Ok(StatusCode::ACCEPTED);
+        return Ok(());
     };
-
     let token = issue_token(
         &state.db,
         user.id,
@@ -55,10 +65,10 @@ pub async fn request_reset(
     .await?;
     let link = format!("{}/reset-password?token={token}", state.config.app_base_url);
     spawn_send(
-        &state,
+        state,
         templates::reset_email(&user.email, &user.name, &link),
     );
-    Ok(StatusCode::ACCEPTED)
+    Ok(())
 }
 
 #[derive(Deserialize)]

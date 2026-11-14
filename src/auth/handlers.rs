@@ -15,7 +15,7 @@ use super::{
     send_verification,
     session::{COOKIE_NAME, clear_cookie, create_session, session_cookie},
     token::hash_token,
-    validate::{normalize_email, validate_name, validate_password},
+    validate::{MAX_PASSWORD_LEN, normalize_email, validate_name, validate_password},
 };
 use crate::{
     AppState,
@@ -130,6 +130,9 @@ pub async fn login(
         }
         Err(_) => None,
     };
+    if body.password.len() > MAX_PASSWORD_LEN {
+        return Err(AppError::InvalidCredentials);
+    }
     let Some(user) = user else {
         verify_dummy(body.password).await?;
         return Err(AppError::InvalidCredentials);

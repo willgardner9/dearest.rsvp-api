@@ -70,6 +70,7 @@ pub struct RateLimits {
     pub reset_email: DefaultKeyedRateLimiter<String>,
     pub reset_confirm_ip: DefaultKeyedRateLimiter<String>,
     pub resend_user: DefaultKeyedRateLimiter<String>,
+    pub verify_ip: DefaultKeyedRateLimiter<String>,
     pub invite_user: DefaultKeyedRateLimiter<String>,
 }
 
@@ -93,6 +94,7 @@ impl RateLimits {
             reset_email: per_hour(3),
             reset_confirm_ip: per_minute(10),
             resend_user: per_hour(3),
+            verify_ip: per_minute(10),
             invite_user: per_hour(20),
         }
     }
@@ -107,6 +109,7 @@ impl RateLimits {
             &self.reset_email,
             &self.reset_confirm_ip,
             &self.resend_user,
+            &self.verify_ip,
             &self.invite_user,
         ] {
             limiter.retain_recent();

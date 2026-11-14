@@ -3,6 +3,7 @@ pub mod config;
 pub mod email;
 pub mod entities;
 pub mod error;
+pub mod json;
 
 use std::{sync::Arc, time::Duration};
 
@@ -58,6 +59,10 @@ pub fn app(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .nest("/auth", auth::router())
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::session::load_session,
+        ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::origin::check_origin,

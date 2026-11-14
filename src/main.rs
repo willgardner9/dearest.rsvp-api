@@ -1,9 +1,10 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use dearest::{AppState, config::Config, email::smtp::SmtpEmailSender};
+use dearest::{AppState, cleanup::spawn_cleanup, config::Config, email::smtp::SmtpEmailSender};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectOptions, Database};
 use tokio::{net::TcpListener, signal};
+use tokio_util::sync::CancellationToken;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -28,16 +29,23 @@ async fn main() -> anyhow::Result<()> {
     let bind_addr = config.bind_addr;
     let state = AppState::new(db, config, email);
 
+    let cancel = CancellationToken::new();
+    let cleanup = spawn_cleanup(state.clone(), cancel.clone());
+
     let listener = TcpListener::bind(bind_addr).await?;
     tracing::info!("listening on {bind_addr}");
     axum::serve(
         listener,
         dearest::app(state.clone()).into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .with_graceful_shutdown(shutdown_signal())
+    .with_graceful_shutdown(shutdown_signal(cancel.clone()))
     .await?;
 
-    // Let email sends that are in progress finish before the process ends.
+    // Stop the cleanup task, then let email sends that are in progress finish before the process ends.
+    cancel.cancel();
+    if let Err(err) = cleanup.await {
+        tracing::warn!("cleanup task ended with an error: {err}");
+    }
     state.tasks.close();
     if tokio::time::timeout(Duration::from_secs(10), state.tasks.wait())
         .await
@@ -49,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 /// Wait for Ctrl-C or, on Unix, SIGTERM. `docker stop` sends SIGTERM.
-async fn shutdown_signal() {
+async fn shutdown_signal(cancel: CancellationToken) {
     let ctrl_c = async {
         let _ = signal::ctrl_c().await;
     };
@@ -68,4 +76,5 @@ async fn shutdown_signal() {
         _ = terminate => {},
     }
     tracing::info!("shutdown signal received");
+    cancel.cancel();
 }

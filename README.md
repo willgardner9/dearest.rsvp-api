@@ -30,6 +30,35 @@ curl -i localhost:3000/health
 
 The endpoint returns `200` and `{"status":"ok","db":"up"}` when the database is reachable. It returns `503` when the database is down.
 
+Docker Compose also starts Mailpit, a local email server. The API sends email to it. Open `http://localhost:8025` to read the email, for example the verification email after a signup.
+
+## Auth API
+
+All bodies are JSON. An error has the body `{"error": "<code>"}`. A session cookie (`dearest_session`) identifies the user. A user must verify the email before the routes that are marked "Verified" work.
+
+| Method and path | Who | Purpose |
+| --- | --- | --- |
+| `POST /auth/signup` | anyone | Create an account and a session. Send the verification email. |
+| `POST /auth/login` | anyone | Start a session. |
+| `POST /auth/logout` | anyone | End the session. |
+| `GET /auth/me` | session | The user and the tenants of the user. |
+| `POST /auth/verify-email` | anyone | Verify the email with a token. |
+| `POST /auth/verify-email/resend` | session | Send a new verification email. |
+| `POST /auth/password-reset` | anyone | Send a reset email. Always `202`. |
+| `POST /auth/password-reset/confirm` | anyone | Set a new password with a token. Ends all sessions. |
+| `GET /invites/{token}` | anyone | Show the tenant and the inviter of an invite. |
+| `POST /invites/{token}/accept` | anyone | Accept an invite. A new user sends `name` and `password`. |
+| `POST /tenants` | Verified | Create a tenant. |
+| `GET /tenants/{tenant_id}` | Verified member | Tenant details. |
+| `GET /tenants/{tenant_id}/members` | Verified member | List the members. |
+| `GET /tenants/{tenant_id}/invites` | Verified member | List the open invites. |
+| `POST /tenants/{tenant_id}/invites` | Verified member | Create an invite, or send it again. |
+| `DELETE /tenants/{tenant_id}/invites/{invite_id}` | Verified member | Cancel an invite. |
+
+A user who is not a member of a tenant gets `404` on the routes of that tenant.
+
+The API runs behind a proxy. It reads the client IP for the rate limits from the last entry of `X-Forwarded-For`. Do not open the API port to the internet.
+
 ## Environment variables
 
 The API reads these in `src/config.rs`. It also loads a `.env` file if one exists. See `.env.example`.
@@ -114,8 +143,16 @@ These are the same checks that CI runs on a pull request. To skip a hook one tim
 ## Layout
 
 - `src/config.rs`: configuration struct, read from the environment
-- `src/lib.rs`: router, handlers, and state
-- `src/main.rs`: start-up, database connection, and server
+- `src/lib.rs`: router, health route, and state
+- `src/main.rs`: start-up, database connection, server, and shutdown
+- `src/error.rs`: `AppError` and the error codes
+- `src/auth/`: passwords, tokens, sessions, extractors, and the `/auth` routes
+- `src/email/`: `EmailSender` trait, SMTP sender, test sender, and templates
+- `src/tenants.rs`: `/tenants` routes
+- `src/invites.rs`: `/invites` routes and the invite routes of a tenant
+- `src/rate_limit.rs`: client IP extractor and rate limits
+- `src/cleanup.rs`: the hourly task that deletes old rows
+- `src/entities/`: SeaORM entities, generated from the database
 - `migration/`: migration crate and its CLI binary
 - `tests/`: integration tests
 - `.githooks/`: Git hooks for format and lint checks

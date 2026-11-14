@@ -3,7 +3,10 @@ use axum::{
     routing::{get, post},
 };
 use chrono::{Duration, Utc};
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set,
+    TransactionTrait, sea_query::Expr,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -20,6 +23,7 @@ pub mod password;
 pub mod session;
 pub mod token;
 pub mod validate;
+pub mod verify;
 
 pub const PURPOSE_VERIFY_EMAIL: &str = "verify_email";
 pub const PURPOSE_RESET_PASSWORD: &str = "reset_password";
@@ -31,6 +35,8 @@ pub fn router() -> Router<AppState> {
         .route("/login", post(handlers::login))
         .route("/logout", post(handlers::logout))
         .route("/me", get(handlers::me))
+        .route("/verify-email", post(verify::verify_email))
+        .route("/verify-email/resend", post(verify::resend))
 }
 
 /// Replace the unused verification tokens of the user with a new one (24 hours).
@@ -66,5 +72,18 @@ pub async fn send_verification(state: &AppState, user: &users::Model) -> AppResu
         state,
         templates::verification_email(&user.email, &user.name, &link),
     );
+    Ok(())
+}
+
+/// Set `email_verified_at` to now if it is not set. Call it inside a transaction.
+pub async fn mark_verified(db: &impl ConnectionTrait, user_id: Uuid) -> AppResult<()> {
+    let now = Utc::now().fixed_offset();
+    users::Entity::update_many()
+        .col_expr(users::Column::EmailVerifiedAt, Expr::value(now))
+        .col_expr(users::Column::UpdatedAt, Expr::value(now))
+        .filter(users::Column::Id.eq(user_id))
+        .filter(users::Column::EmailVerifiedAt.is_null())
+        .exec(db)
+        .await?;
     Ok(())
 }

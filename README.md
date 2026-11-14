@@ -40,6 +40,14 @@ The API reads these in `src/config.rs`. It also loads a `.env` file if one exist
 | `BIND_ADDR` | `0.0.0.0:3000` | Address the API binds to |
 | `DB_MAX_CONNECTIONS` | `10` | Maximum size of the database connection pool |
 | `CORS_ALLOWED_ORIGINS` | `https://app.dearest.rsvp` | Browser origins that may call the API. Separate origins with a comma |
+| `APP_BASE_URL` | `https://app.dearest.rsvp` | Base URL for links in email |
+| `SMTP_HOST` | none (required) | SMTP server |
+| `SMTP_PORT` | `465` | SMTP port |
+| `SMTP_USERNAME` | none | SMTP user |
+| `SMTP_PASSWORD` | none | SMTP password. Keep it secret |
+| `SMTP_TLS` | `true` | Use TLS. Set to `false` for Mailpit |
+| `EMAIL_FROM` | `Dearest <hello@dearest.rsvp>` | Sender of email |
+| `COOKIE_SECURE` | `true` | Set the `Secure` attribute on the session cookie |
 | `RUST_LOG` | `info,tower_http=debug` | Log filter |
 | `API_PORT` | `3000` | Host port that Docker Compose publishes |
 

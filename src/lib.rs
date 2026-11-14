@@ -5,6 +5,7 @@ pub mod entities;
 pub mod error;
 pub mod json;
 pub mod rate_limit;
+pub mod tenants;
 
 use std::{sync::Arc, time::Duration};
 
@@ -62,6 +63,7 @@ pub fn app(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .nest("/auth", auth::router())
+        .nest("/tenants", tenants::router())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::session::load_session,

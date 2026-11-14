@@ -1,7 +1,14 @@
-use axum::{extract::FromRequestParts, http::request::Parts};
+use std::collections::HashMap;
+
+use axum::{
+    extract::{FromRequestParts, Path},
+    http::request::Parts,
+};
+use sea_orm::{ColumnTrait, ModelTrait, QueryFilter};
+use uuid::Uuid;
 
 use super::session::CurrentSession;
-use crate::error::AppError;
+use crate::{AppState, entities::tenants, error::AppError};
 
 fn current(parts: &Parts) -> Option<CurrentSession> {
     parts
@@ -45,5 +52,39 @@ impl<S: Send + Sync> FromRequestParts<S> for MaybeUser {
 
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
         Ok(Self(current(parts)))
+    }
+}
+
+/// A verified user who is a member of the tenant in the path (`tenant_id`).
+/// An ID that is not valid, a tenant that does not exist, and a tenant of
+/// someone else all give the same `404`.
+pub struct TenantMember {
+    pub session: CurrentSession,
+    pub tenant: tenants::Model,
+}
+
+impl FromRequestParts<AppState> for TenantMember {
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let VerifiedUser(session) = VerifiedUser::from_request_parts(parts, state).await?;
+        let Path(params) = Path::<HashMap<String, String>>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| AppError::NotFound)?;
+        let tenant_id: Uuid = params
+            .get("tenant_id")
+            .and_then(|value| value.parse().ok())
+            .ok_or(AppError::NotFound)?;
+        let tenant = session
+            .user
+            .find_related(tenants::Entity)
+            .filter(tenants::Column::Id.eq(tenant_id))
+            .one(&state.db)
+            .await?
+            .ok_or(AppError::NotFound)?;
+        Ok(Self { session, tenant })
     }
 }

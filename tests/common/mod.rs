@@ -1,6 +1,12 @@
 #![allow(dead_code)]
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering},
+    },
+    time::Duration,
+};
 
 use axum::{
     Router,
@@ -73,6 +79,7 @@ pub struct TestApp {
     pub db: DatabaseConnection,
     pub email: Arc<RecordingEmailSender>,
     pub state: AppState,
+    ip_counter: AtomicU32,
 }
 
 impl TestApp {
@@ -104,6 +111,7 @@ impl TestApp {
             db,
             email,
             state,
+            ip_counter: AtomicU32::new(0),
         }
     }
 
@@ -174,5 +182,53 @@ impl TestApp {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
         panic!("no email to {to} within 1 second");
+    }
+}
+
+impl TestApp {
+    /// A client IP that no earlier call used, so many sign-ups stay under the IP limits.
+    pub fn unique_ip(&self) -> String {
+        let n = self.ip_counter.fetch_add(1, Ordering::Relaxed);
+        format!("198.18.{}.{}", n / 250, n % 250 + 1)
+    }
+
+    /// Sign up and verify a user. Return the session cookie.
+    pub async fn verified_user(&self, email: &str) -> String {
+        let response = self
+            .request_from(
+                &self.unique_ip(),
+                Method::POST,
+                "/auth/signup",
+                Some(serde_json::json!({ "email": email, "password": "pw", "name": "Alex" })),
+                None,
+            )
+            .await;
+        let cookie = response.session_cookie().expect("signup sets a cookie");
+        let token = dearest::email::templates::extract_token(
+            &self.wait_for_email(&email.trim().to_lowercase()).await,
+        );
+        let verified = self
+            .request(
+                Method::POST,
+                "/auth/verify-email",
+                Some(serde_json::json!({ "token": token })),
+                Some(&cookie),
+            )
+            .await;
+        assert_eq!(verified.status, StatusCode::NO_CONTENT);
+        cookie
+    }
+
+    pub async fn create_tenant(&self, cookie: &str, name: &str) -> Uuid {
+        let response = self
+            .request(
+                Method::POST,
+                "/tenants",
+                Some(serde_json::json!({ "name": name })),
+                Some(cookie),
+            )
+            .await;
+        assert_eq!(response.status, StatusCode::CREATED, "{:?}", response.body);
+        response.body["id"].as_str().unwrap().parse().unwrap()
     }
 }

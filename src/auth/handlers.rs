@@ -6,7 +6,6 @@ use sea_orm::{
     QueryOrder, Set, SqlErr, TransactionTrait,
 };
 use serde::Deserialize;
-use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{
@@ -19,6 +18,7 @@ use super::{
 };
 use crate::{
     AppState,
+    dto::{Me, MeUser, MembershipSummary},
     entities::{sessions, tenants, users},
     error::{AppError, AppResult},
     json::ApiJson,
@@ -26,24 +26,27 @@ use crate::{
 };
 
 /// The body of `GET /auth/me`, also returned by signup and login.
-pub async fn me_body(db: &impl ConnectionTrait, user: &users::Model) -> AppResult<Value> {
+pub async fn me_body(db: &impl ConnectionTrait, user: &users::Model) -> AppResult<Me> {
     let memberships = user
         .find_related(tenants::Entity)
         .order_by_asc(tenants::Column::Name)
         .all(db)
         .await?;
-    Ok(json!({
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "name": user.name,
-            "email_verified": user.email_verified_at.is_some(),
+    Ok(Me {
+        user: MeUser {
+            id: user.id,
+            email: user.email.clone(),
+            name: user.name.clone(),
+            email_verified: user.email_verified_at.is_some(),
         },
-        "memberships": memberships
-            .iter()
-            .map(|tenant| json!({ "tenant_id": tenant.id, "tenant_name": tenant.name }))
-            .collect::<Vec<_>>(),
-    }))
+        memberships: memberships
+            .into_iter()
+            .map(|tenant| MembershipSummary {
+                tenant_id: tenant.id,
+                tenant_name: tenant.name,
+            })
+            .collect(),
+    })
 }
 
 #[derive(Deserialize)]
@@ -57,7 +60,7 @@ pub async fn signup(
     State(state): State<AppState>,
     ClientIp(ip): ClientIp,
     ApiJson(body): ApiJson<SignupBody>,
-) -> AppResult<(StatusCode, CookieJar, Json<Value>)> {
+) -> AppResult<(StatusCode, CookieJar, Json<Me>)> {
     check(&state.limits.signup_ip, &ip)?;
     let email = normalize_email(&body.email)?;
     let name = validate_name(&body.name)?;
@@ -117,7 +120,7 @@ pub async fn login(
     State(state): State<AppState>,
     ClientIp(ip): ClientIp,
     ApiJson(body): ApiJson<LoginBody>,
-) -> AppResult<(CookieJar, Json<Value>)> {
+) -> AppResult<(CookieJar, Json<Me>)> {
     check(&state.limits.login_ip, &ip)?;
     // An email that cannot be valid is an unknown email: the answer is the same.
     let user = match normalize_email(&body.email) {
@@ -159,9 +162,6 @@ pub async fn logout(
     Ok((StatusCode::NO_CONTENT, jar))
 }
 
-pub async fn me(
-    State(state): State<AppState>,
-    AnyUser(session): AnyUser,
-) -> AppResult<Json<Value>> {
+pub async fn me(State(state): State<AppState>, AnyUser(session): AnyUser) -> AppResult<Json<Me>> {
     Ok(Json(me_body(&state.db, &session.user).await?))
 }

@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod cleanup;
 pub mod config;
+pub mod dto;
 pub mod email;
 pub mod entities;
 pub mod error;
@@ -19,11 +20,10 @@ use axum::{
     routing::get,
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection};
-use serde_json::{Value, json};
 use tokio_util::task::TaskTracker;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-use crate::{config::Config, email::EmailSender, rate_limit::RateLimits};
+use crate::{config::Config, dto::Health, email::EmailSender, rate_limit::RateLimits};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -93,14 +93,23 @@ pub fn app(state: AppState) -> Router {
         .layer(cors)
 }
 
-async fn health(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
+async fn health(State(state): State<AppState>) -> (StatusCode, Json<Health>) {
     match state.db.execute_unprepared("SELECT 1").await {
-        Ok(_) => (StatusCode::OK, Json(json!({ "status": "ok", "db": "up" }))),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(Health {
+                status: "ok".into(),
+                db: "up".into(),
+            }),
+        ),
         Err(err) => {
             tracing::error!("health check db error: {err}");
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({ "status": "degraded", "db": "down" })),
+                Json(Health {
+                    status: "degraded".into(),
+                    db: "down".into(),
+                }),
             )
         }
     }

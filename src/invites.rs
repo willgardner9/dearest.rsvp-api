@@ -15,7 +15,6 @@ use sea_orm::{
     sea_query::{Expr, OnConflict},
 };
 use serde::Deserialize;
-use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::{
@@ -28,6 +27,7 @@ use crate::{
         token::{hash_token, new_token},
         validate::{normalize_email, validate_name, validate_password},
     },
+    dto::{AcceptedInvite, CreatedInvite, Invite, InvitePreview},
     email::{spawn_send, templates},
     entities::{invites, tenants, user_tenant_memberships, users},
     error::{AppError, AppResult},
@@ -64,7 +64,7 @@ async fn create_invite(
     State(state): State<AppState>,
     member: TenantMember,
     ApiJson(body): ApiJson<InviteBody>,
-) -> AppResult<(StatusCode, Json<Value>)> {
+) -> AppResult<(StatusCode, Json<CreatedInvite>)> {
     check(
         &state.limits.invite_user,
         &member.session.user.id.to_string(),
@@ -102,11 +102,11 @@ async fn create_invite(
     );
     Ok((
         StatusCode::CREATED,
-        Json(json!({
-            "id": invite.id,
-            "email": invite.email,
-            "expires_at": invite.expires_at,
-        })),
+        Json(CreatedInvite {
+            id: invite.id,
+            email: invite.email,
+            expires_at: invite.expires_at,
+        }),
     ))
 }
 
@@ -168,7 +168,7 @@ async fn upsert_invite(
 async fn list_invites(
     State(state): State<AppState>,
     member: TenantMember,
-) -> AppResult<Json<Value>> {
+) -> AppResult<Json<Vec<Invite>>> {
     let rows = invites::Entity::find()
         .filter(invites::Column::TenantId.eq(member.tenant.id))
         .filter(invites::Column::AcceptedAt.is_null())
@@ -178,18 +178,16 @@ async fn list_invites(
         .find_also_related(users::Entity)
         .all(&state.db)
         .await?;
-    let list: Vec<Value> = rows
+    let list: Vec<Invite> = rows
         .into_iter()
-        .map(|(invite, inviter)| {
-            json!({
-                "id": invite.id,
-                "email": invite.email,
-                "invited_by_name": inviter.map(|user| user.name),
-                "expires_at": invite.expires_at,
-            })
+        .map(|(invite, inviter)| Invite {
+            id: invite.id,
+            email: invite.email,
+            invited_by_name: inviter.map(|user| user.name),
+            expires_at: invite.expires_at,
         })
         .collect();
-    Ok(Json(Value::Array(list)))
+    Ok(Json(list))
 }
 
 async fn cancel_invite(
@@ -245,7 +243,7 @@ async fn account_exists(db: &impl ConnectionTrait, email: &str) -> Result<bool, 
 async fn preview(
     State(state): State<AppState>,
     Path(token): Path<String>,
-) -> AppResult<Json<Value>> {
+) -> AppResult<Json<InvitePreview>> {
     let invite = find_open_invite(&state.db, &token, false).await?;
     let (tenant, inviter, account_exists) = tokio::try_join!(
         tenants::Entity::find_by_id(invite.tenant_id).one(&state.db),
@@ -254,13 +252,13 @@ async fn preview(
     )?;
     let tenant = tenant.ok_or(AppError::NotFound)?;
     let inviter = inviter.ok_or(AppError::NotFound)?;
-    Ok(Json(json!({
-        "tenant_id": tenant.id,
-        "tenant_name": tenant.name,
-        "inviter_name": inviter.name,
-        "email": invite.email,
-        "account_exists": account_exists,
-    })))
+    Ok(Json(InvitePreview {
+        tenant_id: tenant.id,
+        tenant_name: tenant.name,
+        inviter_name: inviter.name,
+        email: invite.email,
+        account_exists,
+    }))
 }
 
 #[derive(Deserialize)]
@@ -274,7 +272,7 @@ async fn accept(
     MaybeUser(session): MaybeUser,
     Path(token): Path<String>,
     body: Bytes,
-) -> AppResult<(CookieJar, Json<Value>)> {
+) -> AppResult<(CookieJar, Json<AcceptedInvite>)> {
     let now = Utc::now().fixed_offset();
     match session {
         Some(session) => {
@@ -294,7 +292,9 @@ async fn accept(
             }
             Ok((
                 CookieJar::new(),
-                Json(json!({ "tenant_id": invite.tenant_id })),
+                Json(AcceptedInvite {
+                    tenant_id: invite.tenant_id,
+                }),
             ))
         }
         None => {
@@ -336,7 +336,12 @@ async fn accept(
             txn.commit().await?;
             let jar =
                 CookieJar::new().add(session_cookie(&session_token, state.config.cookie_secure));
-            Ok((jar, Json(json!({ "tenant_id": invite.tenant_id }))))
+            Ok((
+                jar,
+                Json(AcceptedInvite {
+                    tenant_id: invite.tenant_id,
+                }),
+            ))
         }
     }
 }

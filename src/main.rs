@@ -1,4 +1,6 @@
-use dearest::config::Config;
+use std::{sync::Arc, time::Duration};
+
+use dearest::{AppState, config::Config, email::smtp::SmtpEmailSender};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectOptions, Database};
 use tokio::{net::TcpListener, signal};
@@ -22,11 +24,24 @@ async fn main() -> anyhow::Result<()> {
     let db = Database::connect(options).await?;
     Migrator::up(&db, None).await?;
 
-    let listener = TcpListener::bind(config.bind_addr).await?;
-    tracing::info!("listening on {}", config.bind_addr);
-    axum::serve(listener, dearest::app(db, config.cors_allowed_origins))
+    let email = Arc::new(SmtpEmailSender::new(&config.smtp, &config.email_from)?);
+    let bind_addr = config.bind_addr;
+    let state = AppState::new(db, config, email);
+
+    let listener = TcpListener::bind(bind_addr).await?;
+    tracing::info!("listening on {bind_addr}");
+    axum::serve(listener, dearest::app(state.clone()))
         .with_graceful_shutdown(shutdown_signal())
         .await?;
+
+    // Let email sends that are in progress finish before the process ends.
+    state.tasks.close();
+    if tokio::time::timeout(Duration::from_secs(10), state.tasks.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!("background tasks did not finish within 10 seconds");
+    }
     Ok(())
 }
 

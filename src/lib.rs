@@ -1,28 +1,49 @@
+pub mod auth;
 pub mod config;
 pub mod email;
 pub mod entities;
+pub mod error;
+
+use std::{sync::Arc, time::Duration};
+
 use axum::{
     Json, Router,
     extract::State,
-    http::{HeaderValue, Method, StatusCode, header},
+    http::{Method, StatusCode, header},
+    middleware,
     routing::get,
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection};
 use serde_json::{Value, json};
-use std::time::Duration;
-
+use tokio_util::task::TaskTracker;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
+
+use crate::{config::Config, email::EmailSender};
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: DatabaseConnection,
+    pub config: Arc<Config>,
+    pub email: Arc<dyn EmailSender>,
+    /// Tracks background tasks, for example email sends. `main` waits for them on shutdown.
+    pub tasks: TaskTracker,
 }
 
-/// Build the application router.
+impl AppState {
+    pub fn new(db: DatabaseConnection, config: Config, email: Arc<dyn EmailSender>) -> Self {
+        Self {
+            db,
+            config: Arc::new(config),
+            email,
+            tasks: TaskTracker::new(),
+        }
+    }
+}
+
 /// Build the router. Only a browser on one of `cors_allowed_origins` may call the API.
-pub fn app(db: DatabaseConnection, cors_allowed_origins: Vec<HeaderValue>) -> Router {
+pub fn app(state: AppState) -> Router {
     let cors = CorsLayer::new()
-        .allow_origin(cors_allowed_origins)
+        .allow_origin(state.config.cors_allowed_origins.clone())
         .allow_methods([
             Method::GET,
             Method::POST,
@@ -31,11 +52,17 @@ pub fn app(db: DatabaseConnection, cors_allowed_origins: Vec<HeaderValue>) -> Ro
             Method::DELETE,
         ])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
+        .allow_credentials(true)
         .max_age(Duration::from_secs(3600));
 
     Router::new()
         .route("/health", get(health))
-        .with_state(AppState { db })
+        .nest("/auth", auth::router())
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::origin::check_origin,
+        ))
+        .with_state(state)
         .layer(TraceLayer::new_for_http())
         // CORS is the outer layer, so it answers a preflight request first.
         .layer(cors)

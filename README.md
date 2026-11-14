@@ -89,11 +89,14 @@ sea-orm-cli migrate up
 
 ## Tests
 
-The tests use a mock database. They do not need Postgres.
+Some tests use a mock database. The integration tests need Postgres. Start it first:
 
 ```bash
+docker compose up -d db
 cargo test --workspace
 ```
+
+Each integration test makes its own database on the server in `TEST_DATABASE_URL`. The default is `postgres://postgres:postgres@localhost:5432/postgres`. Run `docker compose down -v` to remove the test databases.
 
 ## Git hooks
 

@@ -208,9 +208,17 @@ impl TestApp {
             )
             .await;
         let cookie = response.session_cookie().expect("signup sets a cookie");
-        let token = dearest::email::templates::extract_token(
-            &self.wait_for_email(&email.trim().to_lowercase()).await,
-        );
+        let to = email.trim().to_lowercase();
+        // The address can already have an invite email, so wait for the verification email.
+        let mut message = self.wait_for_email(&to).await;
+        for _ in 0..100 {
+            if message.text.contains("/verify-email/confirm") {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            message = self.wait_for_email(&to).await;
+        }
+        let token = dearest::email::templates::extract_token(&message);
         let verified = self
             .request(
                 Method::POST,

@@ -1,15 +1,17 @@
+mod common;
+
 use axum::{
     body::Body,
-    http::{HeaderValue, Method, Request, header},
+    http::{Method, Request, header},
 };
 use sea_orm::{DatabaseBackend, MockDatabase};
 use tower::ServiceExt;
 
-const ALLOWED_ORIGIN: &str = "https://app.dearest.rsvp";
+const ALLOWED_ORIGIN: &str = common::APP_ORIGIN;
 
 fn app() -> axum::Router {
     let db = MockDatabase::new(DatabaseBackend::Postgres).into_connection();
-    dearest::app(db, vec![HeaderValue::from_static(ALLOWED_ORIGIN)])
+    dearest::app(common::mock_state(db))
 }
 
 #[tokio::test]
@@ -68,5 +70,23 @@ async fn preflight_request_is_allowed() {
     assert_eq!(
         response.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN],
         ALLOWED_ORIGIN
+    );
+}
+
+#[tokio::test]
+async fn cors_allows_credentials() {
+    let response = app()
+        .oneshot(
+            Request::get("/health")
+                .header(header::ORIGIN, ALLOWED_ORIGIN)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.headers()[header::ACCESS_CONTROL_ALLOW_CREDENTIALS],
+        "true"
     );
 }

@@ -1,3 +1,5 @@
+mod common;
+
 use axum::{
     body::Body,
     http::{Request, StatusCode},
@@ -8,7 +10,7 @@ use serde_json::{Value, json};
 use tower::ServiceExt;
 
 async fn get_health(db: sea_orm::DatabaseConnection) -> (StatusCode, Value) {
-    let response = dearest::app(db, vec![])
+    let response = dearest::app(common::mock_state(db))
         .oneshot(Request::get("/health").body(Body::empty()).unwrap())
         .await
         .unwrap();

@@ -5,15 +5,28 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
+argon2 = "0.6.0"
+async-trait = "0.1.92"
 axum = "0.8.9"
+axum-extra = { version = "0.12.6", features = ["cookie"] }
+base64 = "0.23.1"
+chrono = { version = "0.4.45", features = ["serde"] }
 dotenvy = "0.15.7"
+governor = "0.10.4"
+lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "ring", "rustls-native-certs"] }
 migration = { version = "0.1.0", path = "migration" }
+rand = "0.10.3"
 sea-orm = { version = "2.0.4", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+sha2 = "0.11.1"
+time = "0.3.55"
 tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "signal"] }
+tokio-util = { version = "0.7.20", features = ["rt"] }
 tower-http = { version = "0.7.1", features = ["trace", "cors"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+uuid = { version = "1.29.2", features = ["v7", "serde"] }
 
 [workspace]
 members = [".", "migration"]
@@ -22,3 +35,4 @@ members = [".", "migration"]
 http-body-util = "0.1.5"
 sea-orm = { version = "2.0.4", features = ["mock"] }
 tower = { version = "0.5.3", features = ["util"] }
+uuid = { version = "1.29.2", features = ["v4"] }

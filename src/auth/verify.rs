@@ -12,6 +12,7 @@ use crate::{
     entities::email_tokens,
     error::{AppError, AppResult},
     json::ApiJson,
+    rate_limit::check,
 };
 
 #[derive(Deserialize)]
@@ -53,6 +54,7 @@ pub async fn resend(
     State(state): State<AppState>,
     AnyUser(session): AnyUser,
 ) -> AppResult<StatusCode> {
+    check(&state.limits.resend_user, &session.user.id.to_string())?;
     if session.user.email_verified_at.is_none() {
         send_verification(&state, &session.user).await?;
     }

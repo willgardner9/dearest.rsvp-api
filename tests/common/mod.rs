@@ -114,11 +114,24 @@ impl TestApp {
         body: Option<Value>,
         cookie: Option<&str>,
     ) -> TestResponse {
+        self.request_from("203.0.113.1", method, path, body, cookie)
+            .await
+    }
+
+    /// Like `request`, with a chosen `X-Forwarded-For` header value.
+    pub async fn request_from(
+        &self,
+        forwarded_for: &str,
+        method: Method,
+        path: &str,
+        body: Option<Value>,
+        cookie: Option<&str>,
+    ) -> TestResponse {
         let mut builder = Request::builder()
             .method(method)
             .uri(path)
             .header(header::ORIGIN, APP_ORIGIN)
-            .header("x-forwarded-for", "203.0.113.1");
+            .header("x-forwarded-for", forwarded_for);
         if let Some(cookie) = cookie {
             builder = builder.header(header::COOKIE, cookie);
         }

@@ -4,6 +4,7 @@ pub mod email;
 pub mod entities;
 pub mod error;
 pub mod json;
+pub mod rate_limit;
 
 use std::{sync::Arc, time::Duration};
 
@@ -19,7 +20,7 @@ use serde_json::{Value, json};
 use tokio_util::task::TaskTracker;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-use crate::{config::Config, email::EmailSender};
+use crate::{config::Config, email::EmailSender, rate_limit::RateLimits};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -28,6 +29,7 @@ pub struct AppState {
     pub email: Arc<dyn EmailSender>,
     /// Tracks background tasks, for example email sends. `main` waits for them on shutdown.
     pub tasks: TaskTracker,
+    pub limits: Arc<RateLimits>,
 }
 
 impl AppState {
@@ -37,6 +39,7 @@ impl AppState {
             config: Arc::new(config),
             email,
             tasks: TaskTracker::new(),
+            limits: Arc::new(RateLimits::new()),
         }
     }
 }

@@ -22,6 +22,7 @@ use crate::{
     entities::{sessions, tenants, users},
     error::{AppError, AppResult},
     json::ApiJson,
+    rate_limit::{ClientIp, check},
 };
 
 /// The body of `GET /auth/me`, also returned by signup and login.
@@ -54,8 +55,10 @@ pub struct SignupBody {
 
 pub async fn signup(
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     ApiJson(body): ApiJson<SignupBody>,
 ) -> AppResult<(StatusCode, CookieJar, Json<Value>)> {
+    check(&state.limits.signup_ip, &ip)?;
     let email = normalize_email(&body.email)?;
     let name = validate_name(&body.name)?;
     validate_password(&body.password)?;
@@ -112,11 +115,14 @@ pub struct LoginBody {
 
 pub async fn login(
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     ApiJson(body): ApiJson<LoginBody>,
 ) -> AppResult<(CookieJar, Json<Value>)> {
+    check(&state.limits.login_ip, &ip)?;
     // An email that cannot be valid is an unknown email: the answer is the same.
     let user = match normalize_email(&body.email) {
         Ok(email) => {
+            check(&state.limits.login_email, &email)?;
             users::Entity::find()
                 .filter(users::Column::Email.eq(email))
                 .one(&state.db)

@@ -20,6 +20,7 @@ use crate::{
     entities::{email_tokens, sessions, users},
     error::{AppError, AppResult},
     json::ApiJson,
+    rate_limit::{ClientIp, check},
 };
 
 #[derive(Deserialize)]
@@ -30,11 +31,17 @@ pub struct ResetRequestBody {
 /// Always answer `202`, so the answer does not show if an account exists.
 pub async fn request_reset(
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     ApiJson(body): ApiJson<ResetRequestBody>,
 ) -> AppResult<StatusCode> {
+    check(&state.limits.reset_ip, &ip)?;
     let Ok(email) = normalize_email(&body.email) else {
         return Ok(StatusCode::ACCEPTED);
     };
+    // The email limit answers `202` too, so the limit does not show if an account exists.
+    if check(&state.limits.reset_email, &email).is_err() {
+        return Ok(StatusCode::ACCEPTED);
+    }
     let Some(user) = users::Entity::find()
         .filter(users::Column::Email.eq(email))
         .one(&state.db)

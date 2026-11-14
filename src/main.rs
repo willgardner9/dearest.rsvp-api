@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use dearest::{AppState, config::Config, email::smtp::SmtpEmailSender};
 use migration::{Migrator, MigratorTrait};
@@ -30,9 +30,12 @@ async fn main() -> anyhow::Result<()> {
 
     let listener = TcpListener::bind(bind_addr).await?;
     tracing::info!("listening on {bind_addr}");
-    axum::serve(listener, dearest::app(state.clone()))
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        dearest::app(state.clone()).into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
 
     // Let email sends that are in progress finish before the process ends.
     state.tasks.close();

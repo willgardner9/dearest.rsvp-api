@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use std::{
+    net::SocketAddr,
     sync::{
         Arc,
         atomic::{AtomicU32, Ordering},
@@ -11,6 +12,7 @@ use std::{
 use axum::{
     Router,
     body::Body,
+    extract::ConnectInfo,
     http::{HeaderValue, Method, Request, StatusCode, header},
 };
 use dearest::{
@@ -139,7 +141,9 @@ impl TestApp {
             .method(method)
             .uri(path)
             .header(header::ORIGIN, APP_ORIGIN)
-            .header("x-forwarded-for", forwarded_for);
+            .header("x-forwarded-for", forwarded_for)
+            // The test requests come from the proxy, on a private address.
+            .extension(ConnectInfo(SocketAddr::from(([10, 0, 0, 2], 4000))));
         if let Some(cookie) = cookie {
             builder = builder.header(header::COOKIE, cookie);
         }

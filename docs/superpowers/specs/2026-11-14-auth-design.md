@@ -251,7 +251,7 @@ All bodies are JSON. Errors use `{"error": "<code>"}`.
 | `POST /auth/verify-email/resend` | session | yes | Sends a new verification email. Older tokens stop working. |
 | `POST /auth/password-reset` | none | yes | `{email}`. Always `202`. |
 | `POST /auth/password-reset/confirm` | none | yes | `{token, password}` |
-| `GET /invites/:token` | none | yes | `{tenant_name, inviter_name, email, account_exists}`. `404` if the token is not valid. |
+| `GET /invites/:token` | none | yes | `{tenant_id, tenant_name, inviter_name, email, account_exists}`. `404` if the token is not valid. The web app uses `tenant_id` to open the tenant after `409 already_member`. |
 | `POST /invites/:token/accept` | optional | yes | No session: `{name, password}` creates the account. Session: adds the membership. |
 | `POST /tenants` | session | no | `{name}`. Creates the tenant and a membership for the user. |
 | `GET /tenants/:tenantId` | member | no | Tenant details. |

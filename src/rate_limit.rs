@@ -1,4 +1,7 @@
-use std::{net::SocketAddr, num::NonZeroU32};
+use std::{
+    net::{IpAddr, SocketAddr},
+    num::NonZeroU32,
+};
 
 use axum::{
     extract::{ConnectInfo, FromRequestParts},
@@ -13,22 +16,41 @@ use crate::error::{AppError, AppResult};
 /// The API runs behind the Dokploy proxy. The proxy adds the client address as the
 /// LAST entry of `X-Forwarded-For`, so a client cannot fake that entry. The first
 /// entries can come from the client, so this code never reads them.
+///
+/// The code reads `X-Forwarded-For` only when the peer address is a loopback or
+/// private address, where the proxy runs. A client that connects directly from a
+/// public address cannot choose its own key.
 pub struct ClientIp(pub String);
 
+fn is_proxy_address(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => ip.is_loopback() || ip.is_private(),
+        IpAddr::V6(ip) => {
+            ip.is_loopback()
+                || ip.is_unique_local()
+                || ip
+                    .to_ipv4_mapped()
+                    .is_some_and(|ip| ip.is_loopback() || ip.is_private())
+        }
+    }
+}
+
 fn client_ip(parts: &Parts) -> String {
-    if let Some(value) = parts
-        .headers
-        .get("x-forwarded-for")
-        .and_then(|value| value.to_str().ok())
+    let peer = parts
+        .extensions
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|ConnectInfo(addr)| addr.ip());
+    if peer.is_some_and(is_proxy_address)
+        && let Some(value) = parts
+            .headers
+            .get("x-forwarded-for")
+            .and_then(|value| value.to_str().ok())
         && let Some(last) = value.rsplit(',').next()
         && !last.trim().is_empty()
     {
         return last.trim().to_owned();
     }
-    parts
-        .extensions
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|ConnectInfo(addr)| addr.ip().to_string())
+    peer.map(|ip| ip.to_string())
         .unwrap_or_else(|| "unknown".to_owned())
 }
 
@@ -46,6 +68,7 @@ pub struct RateLimits {
     pub signup_ip: DefaultKeyedRateLimiter<String>,
     pub reset_ip: DefaultKeyedRateLimiter<String>,
     pub reset_email: DefaultKeyedRateLimiter<String>,
+    pub reset_confirm_ip: DefaultKeyedRateLimiter<String>,
     pub resend_user: DefaultKeyedRateLimiter<String>,
     pub invite_user: DefaultKeyedRateLimiter<String>,
 }
@@ -68,6 +91,7 @@ impl RateLimits {
             signup_ip: per_hour(5),
             reset_ip: per_hour(5),
             reset_email: per_hour(3),
+            reset_confirm_ip: per_minute(10),
             resend_user: per_hour(3),
             invite_user: per_hour(20),
         }
@@ -81,6 +105,7 @@ impl RateLimits {
             &self.signup_ip,
             &self.reset_ip,
             &self.reset_email,
+            &self.reset_confirm_ip,
             &self.resend_user,
             &self.invite_user,
         ] {
@@ -113,7 +138,13 @@ mod tests {
     use crate::error::AppError;
 
     fn parts(forwarded: Option<&str>) -> axum::http::request::Parts {
-        let mut builder = Request::builder().uri("/");
+        parts_from("10.0.1.2:4000", forwarded)
+    }
+
+    fn parts_from(peer: &str, forwarded: Option<&str>) -> axum::http::request::Parts {
+        let mut builder = Request::builder()
+            .uri("/")
+            .extension(ConnectInfo(peer.parse::<SocketAddr>().unwrap()));
         if let Some(value) = forwarded {
             builder = builder.header("x-forwarded-for", value);
         }
@@ -137,8 +168,28 @@ mod tests {
     }
 
     #[test]
-    fn client_ip_without_header_is_unknown() {
-        assert_eq!(client_ip(&parts(None)), "unknown");
+    fn client_ip_without_header_is_peer() {
+        assert_eq!(client_ip(&parts(None)), "10.0.1.2");
+    }
+
+    #[test]
+    fn client_ip_ignores_header_from_public_peer() {
+        assert_eq!(
+            client_ip(&parts_from("198.51.100.7:4000", Some("203.0.113.9"))),
+            "198.51.100.7"
+        );
+    }
+
+    #[test]
+    fn client_ip_without_peer_is_unknown() {
+        let parts = Request::builder()
+            .uri("/")
+            .header("x-forwarded-for", "203.0.113.9")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0;
+        assert_eq!(client_ip(&parts), "unknown");
     }
 
     #[test]

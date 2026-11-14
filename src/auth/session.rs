@@ -90,16 +90,13 @@ pub async fn load_session(
     let mut renewed_token = None;
     if let Some(token) = token {
         let now = Utc::now();
-        let session = sessions::Entity::find()
+        let found = sessions::Entity::find()
             .filter(sessions::Column::TokenHash.eq(hash_token(&token)))
+            .filter(sessions::Column::ExpiresAt.gt(now))
+            .find_also_related(users::Entity)
             .one(&state.db)
-            .await?
-            .filter(|session| session.expires_at > now);
-        if let Some(session) = session
-            && let Some(user) = users::Entity::find_by_id(session.user_id)
-                .one(&state.db)
-                .await?
-        {
+            .await?;
+        if let Some((session, Some(user))) = found {
             if now - session.last_seen_at.with_timezone(&Utc) > Duration::hours(RENEW_AFTER_HOURS) {
                 sessions::Entity::update_many()
                     .col_expr(

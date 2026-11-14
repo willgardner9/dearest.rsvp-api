@@ -84,14 +84,13 @@ async fn create_invite(
 
     // Two requests at the same time can both try to insert. The partial unique
     // index stops one of them, and that one then takes the replace path.
-    let mut attempts = 0;
-    let (invite, token) = loop {
-        attempts += 1;
-        match upsert_invite(&state, tenant.id, member.session.user.id, &email).await {
-            Err(AppError::Internal(_)) if attempts < 2 => continue,
-            other => break other?,
-        }
-    };
+    let (invite, token) =
+        match upsert_invite(&state, tenant.id, member.session.user.id, &email).await? {
+            Some(done) => done,
+            None => upsert_invite(&state, tenant.id, member.session.user.id, &email)
+                .await?
+                .ok_or_else(|| AppError::Internal(anyhow::anyhow!("invite insert conflict")))?,
+        };
 
     let link = format!("{}/invite/{token}", state.config.app_base_url);
     spawn_send(
@@ -109,12 +108,13 @@ async fn create_invite(
 }
 
 /// Replace the token of the open invite for this email, or insert a new invite.
+/// Return `None` if a request at the same time inserted the open invite first.
 async fn upsert_invite(
     state: &AppState,
     tenant_id: Uuid,
     inviter_id: Uuid,
     email: &str,
-) -> AppResult<(invites::Model, String)> {
+) -> AppResult<Option<(invites::Model, String)>> {
     let now = Utc::now();
     let expires_at = (now + Duration::days(INVITE_DAYS)).fixed_offset();
     let (token, hash) = new_token();
@@ -152,14 +152,14 @@ async fn upsert_invite(
             match inserted {
                 Ok(invite) => invite,
                 Err(err) if matches!(err.sql_err(), Some(SqlErr::UniqueConstraintViolation(_))) => {
-                    return Err(AppError::Internal(err.into()));
+                    return Ok(None);
                 }
                 Err(err) => return Err(err.into()),
             }
         }
     };
     txn.commit().await?;
-    Ok((invite, token))
+    Ok(Some((invite, token)))
 }
 
 async fn list_invites(
@@ -250,6 +250,7 @@ async fn preview(
         .await?
         .is_some();
     Ok(Json(json!({
+        "tenant_id": tenant.id,
         "tenant_name": tenant.name,
         "inviter_name": inviter.name,
         "email": invite.email,

@@ -13,7 +13,7 @@ use std::{sync::Arc, time::Duration};
 
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{MatchedPath, Request, State},
     http::{Method, StatusCode, header},
     middleware,
     routing::get,
@@ -79,7 +79,16 @@ pub fn app(state: AppState) -> Router {
             auth::origin::check_origin,
         ))
         .with_state(state)
-        .layer(TraceLayer::new_for_http())
+        // Log the route template, not the URI: a path can hold a secret invite token.
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
+                let path = request
+                    .extensions()
+                    .get::<MatchedPath>()
+                    .map_or("<unmatched>", MatchedPath::as_str);
+                tracing::debug_span!("request", method = %request.method(), path)
+            }),
+        )
         // CORS is the outer layer, so it answers a preflight request first.
         .layer(cors)
 }

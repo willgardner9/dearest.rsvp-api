@@ -170,7 +170,7 @@ async fn preview_shows_tenant_and_inviter() {
     assert_eq!(response.status, StatusCode::OK);
     assert_eq!(
         response.body,
-        json!({ "tenant_name": "Alex & Sam", "inviter_name": "Alex", "email": GUEST, "account_exists": false })
+        json!({ "tenant_id": s.tenant, "tenant_name": "Alex & Sam", "inviter_name": "Alex", "email": GUEST, "account_exists": false })
     );
     signup_unverified(&s.app, GUEST).await;
     let after = preview(&s.app, &token).await;

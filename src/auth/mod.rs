@@ -20,6 +20,7 @@ pub mod extract;
 pub mod handlers;
 pub mod origin;
 pub mod password;
+pub mod reset;
 pub mod session;
 pub mod token;
 pub mod validate;
@@ -37,6 +38,8 @@ pub fn router() -> Router<AppState> {
         .route("/me", get(handlers::me))
         .route("/verify-email", post(verify::verify_email))
         .route("/verify-email/resend", post(verify::resend))
+        .route("/password-reset", post(reset::request_reset))
+        .route("/password-reset/confirm", post(reset::confirm_reset))
 }
 
 /// Replace the unused verification tokens of the user with a new one (24 hours).

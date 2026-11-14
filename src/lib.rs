@@ -7,6 +7,7 @@ pub mod entities;
 pub mod error;
 pub mod invites;
 pub mod json;
+pub mod openapi;
 pub mod rate_limit;
 pub mod tenants;
 
@@ -17,7 +18,6 @@ use axum::{
     extract::{MatchedPath, Request, State},
     http::{Method, StatusCode, header},
     middleware,
-    routing::get,
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection};
 use tokio_util::task::TaskTracker;
@@ -62,14 +62,8 @@ pub fn app(state: AppState) -> Router {
         .allow_credentials(true)
         .max_age(Duration::from_secs(3600));
 
-    Router::new()
-        .route("/health", get(health))
-        .nest("/auth", auth::router())
-        .nest(
-            "/tenants",
-            tenants::router().merge(invites::tenant_routes()),
-        )
-        .nest("/invites", invites::public_router())
+    let (router, _) = openapi::router().split_for_parts();
+    router
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::session::load_session,
@@ -93,6 +87,10 @@ pub fn app(state: AppState) -> Router {
         .layer(cors)
 }
 
+#[utoipa::path(get, path = "/health", tag = "health", responses(
+    (status = 200, description = "The API and the database are up.", body = Health),
+    (status = 503, description = "The database is down.", body = Health),
+))]
 async fn health(State(state): State<AppState>) -> (StatusCode, Json<Health>) {
     match state.db.execute_unprepared("SELECT 1").await {
         Ok(_) => (

@@ -3,6 +3,7 @@ use axum_extra::extract::cookie::CookieJar;
 use chrono::{Duration, Utc};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, TransactionTrait, sea_query::Expr};
 use serde::Deserialize;
+use utoipa::ToSchema;
 
 use super::{
     PURPOSE_RESET_PASSWORD, claim_token, find_open_token, issue_token, mark_verified,
@@ -14,17 +15,25 @@ use crate::{
     AppState,
     email::{spawn_send, templates},
     entities::{sessions, users},
-    error::AppResult,
+    error::{AppResult, ErrorBody},
     json::ApiJson,
     rate_limit::{ClientIp, check},
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ResetRequestBody {
     email: String,
 }
 
 /// Always answer `202`, so the answer does not show if an account exists.
+// A bad email and the per-email limit both answer 202, so 400 is only for a body that does not parse.
+#[utoipa::path(post, path = "/password-reset", tag = "auth", request_body = ResetRequestBody, responses(
+    (status = 202, description = "Accepted. An email goes out if the account exists."),
+    (status = 400, description = "invalid_input", body = ErrorBody),
+    (status = 403, description = "forbidden_origin", body = ErrorBody),
+    (status = 429, description = "rate_limited", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 pub async fn request_reset(
     State(state): State<AppState>,
     ClientIp(ip): ClientIp,
@@ -71,13 +80,20 @@ async fn send_reset(state: &AppState, email: &str) -> AppResult<()> {
     Ok(())
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ConfirmBody {
     token: String,
     password: String,
 }
 
 /// Set a new password, use the token, mark the email as verified, and end all sessions.
+#[utoipa::path(post, path = "/password-reset/confirm", tag = "auth", request_body = ConfirmBody, responses(
+    (status = 204, description = "Password changed. Ends all sessions and clears the cookie."),
+    (status = 400, description = "invalid_input, invalid_token", body = ErrorBody),
+    (status = 403, description = "forbidden_origin", body = ErrorBody),
+    (status = 429, description = "rate_limited", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 pub async fn confirm_reset(
     State(state): State<AppState>,
     ClientIp(ip): ClientIp,

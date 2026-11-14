@@ -1,14 +1,11 @@
-use axum::{
-    Json, Router,
-    extract::State,
-    http::StatusCode,
-    routing::{get, post},
-};
+use axum::{Json, extract::State, http::StatusCode};
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait,
 };
 use serde::Deserialize;
+use utoipa::ToSchema;
+use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
 use crate::{
@@ -19,24 +16,32 @@ use crate::{
     },
     dto::{Member, Tenant},
     entities::{tenants, user_tenant_memberships, users},
-    error::AppResult,
+    error::{AppResult, ErrorBody},
     json::ApiJson,
 };
 
 const MAX_TENANT_NAME_LEN: usize = 200;
 
-pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/", post(create_tenant))
-        .route("/{tenant_id}", get(get_tenant))
-        .route("/{tenant_id}/members", get(list_members))
+pub fn router() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(create_tenant))
+        .routes(routes!(get_tenant))
+        .routes(routes!(list_members))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 struct CreateTenantBody {
     name: String,
 }
 
+#[utoipa::path(post, path = "/", tag = "tenants", request_body = CreateTenantBody,
+    security(("session" = [])), responses(
+    (status = 201, body = Tenant),
+    (status = 400, description = "invalid_input", body = ErrorBody),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 403, description = "forbidden_origin, email_not_verified", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 async fn create_tenant(
     State(state): State<AppState>,
     VerifiedUser(session): VerifiedUser,
@@ -70,6 +75,15 @@ async fn create_tenant(
     ))
 }
 
+// `TenantMember` gives 404 for a bad ID, a missing tenant, and a tenant of someone else.
+#[utoipa::path(get, path = "/{tenant_id}", tag = "tenants", params(("tenant_id" = Uuid, Path)),
+    security(("session" = [])), responses(
+    (status = 200, body = Tenant),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 403, description = "email_not_verified", body = ErrorBody),
+    (status = 404, description = "not_found", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 async fn get_tenant(member: TenantMember) -> Json<Tenant> {
     Json(Tenant {
         id: member.tenant.id,
@@ -77,6 +91,14 @@ async fn get_tenant(member: TenantMember) -> Json<Tenant> {
     })
 }
 
+#[utoipa::path(get, path = "/{tenant_id}/members", tag = "tenants", params(("tenant_id" = Uuid, Path)),
+    security(("session" = [])), responses(
+    (status = 200, body = Vec<Member>),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 403, description = "email_not_verified", body = ErrorBody),
+    (status = 404, description = "not_found", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 async fn list_members(
     State(state): State<AppState>,
     member: TenantMember,

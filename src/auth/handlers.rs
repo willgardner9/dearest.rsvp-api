@@ -6,6 +6,7 @@ use sea_orm::{
     QueryOrder, Set, SqlErr, TransactionTrait,
 };
 use serde::Deserialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::{
@@ -20,7 +21,7 @@ use crate::{
     AppState,
     dto::{Me, MeUser, MembershipSummary},
     entities::{sessions, tenants, users},
-    error::{AppError, AppResult},
+    error::{AppError, AppResult, ErrorBody},
     json::ApiJson,
     rate_limit::{ClientIp, check},
 };
@@ -49,13 +50,21 @@ pub async fn me_body(db: &impl ConnectionTrait, user: &users::Model) -> AppResul
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct SignupBody {
     email: String,
     password: String,
     name: String,
 }
 
+#[utoipa::path(post, path = "/signup", tag = "auth", request_body = SignupBody, responses(
+    (status = 201, description = "Account made. Sets the session cookie.", body = Me),
+    (status = 400, description = "invalid_input", body = ErrorBody),
+    (status = 403, description = "forbidden_origin", body = ErrorBody),
+    (status = 409, description = "email_taken", body = ErrorBody),
+    (status = 429, description = "rate_limited", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 pub async fn signup(
     State(state): State<AppState>,
     ClientIp(ip): ClientIp,
@@ -110,12 +119,20 @@ pub async fn signup(
     Ok((StatusCode::CREATED, jar, Json(body)))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct LoginBody {
     email: String,
     password: String,
 }
 
+#[utoipa::path(post, path = "/login", tag = "auth", request_body = LoginBody, responses(
+    (status = 200, description = "Logged in. Sets the session cookie.", body = Me),
+    (status = 400, description = "invalid_input", body = ErrorBody),
+    (status = 401, description = "invalid_credentials", body = ErrorBody),
+    (status = 403, description = "forbidden_origin", body = ErrorBody),
+    (status = 429, description = "rate_limited", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 pub async fn login(
     State(state): State<AppState>,
     ClientIp(ip): ClientIp,
@@ -148,6 +165,12 @@ pub async fn login(
     Ok((jar, Json(me_body(&state.db, &user).await?)))
 }
 
+// Logout reads the cookie itself and works with no session, so the cookie is optional.
+#[utoipa::path(post, path = "/logout", tag = "auth", security((), ("session" = [])), responses(
+    (status = 204, description = "Logged out. Clears the session cookie."),
+    (status = 403, description = "forbidden_origin", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 pub async fn logout(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -162,6 +185,11 @@ pub async fn logout(
     Ok((StatusCode::NO_CONTENT, jar))
 }
 
+#[utoipa::path(get, path = "/me", tag = "auth", security(("session" = [])), responses(
+    (status = 200, body = Me),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 pub async fn me(State(state): State<AppState>, AnyUser(session): AnyUser) -> AppResult<Json<Me>> {
     Ok(Json(me_body(&state.db, &session.user).await?))
 }

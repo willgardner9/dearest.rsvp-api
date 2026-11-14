@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
 use axum::{
-    Json, Router,
+    Json,
     body::Bytes,
     extract::{Path, State},
     http::StatusCode,
-    routing::{delete, get, post},
 };
 use axum_extra::extract::cookie::CookieJar;
 use chrono::{Duration, Utc};
@@ -15,6 +14,8 @@ use sea_orm::{
     sea_query::{Expr, OnConflict},
 };
 use serde::Deserialize;
+use utoipa::{ToSchema, openapi::RefOr};
+use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
 use crate::{
@@ -30,7 +31,7 @@ use crate::{
     dto::{AcceptedInvite, CreatedInvite, Invite, InvitePreview},
     email::{spawn_send, templates},
     entities::{invites, tenants, user_tenant_memberships, users},
-    error::{AppError, AppResult},
+    error::{AppError, AppResult, ErrorBody},
     json::ApiJson,
     rate_limit::check,
 };
@@ -39,27 +40,48 @@ const INVITE_DAYS: i64 = 7;
 const UPSERT_ATTEMPTS: usize = 3;
 
 /// Routes under `/tenants`: the invites of one tenant. A member calls them.
-pub fn tenant_routes() -> Router<AppState> {
-    Router::new()
-        .route(
-            "/{tenant_id}/invites",
-            post(create_invite).get(list_invites),
-        )
-        .route("/{tenant_id}/invites/{invite_id}", delete(cancel_invite))
+pub fn tenant_routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(create_invite, list_invites))
+        .routes(routes!(cancel_invite))
 }
 
 /// Routes under `/invites`: a person with the token calls them.
-pub fn public_router() -> Router<AppState> {
-    Router::new()
-        .route("/{token}", get(preview))
-        .route("/{token}/accept", post(accept))
+pub fn public_router() -> OpenApiRouter<AppState> {
+    let mut router = OpenApiRouter::new()
+        .routes(routes!(preview))
+        .routes(routes!(accept));
+    // A logged-in user sends no body to `accept`. utoipa has no `required = false`
+    // for a request body, so clear the flag here.
+    if let Some(RefOr::T(body)) = router
+        .get_openapi_mut()
+        .paths
+        .paths
+        .get_mut("/{token}/accept")
+        .and_then(|item| item.post.as_mut())
+        .and_then(|operation| operation.request_body.as_mut())
+    {
+        body.required = None;
+    }
+    router
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 struct InviteBody {
     email: String,
 }
 
+#[utoipa::path(post, path = "/{tenant_id}/invites", tag = "invites", params(("tenant_id" = Uuid, Path)),
+    request_body = InviteBody, security(("session" = [])), responses(
+    (status = 201, body = CreatedInvite),
+    (status = 400, description = "invalid_input", body = ErrorBody),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 403, description = "forbidden_origin, email_not_verified", body = ErrorBody),
+    (status = 404, description = "not_found", body = ErrorBody),
+    (status = 409, description = "already_member", body = ErrorBody),
+    (status = 429, description = "rate_limited", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 async fn create_invite(
     State(state): State<AppState>,
     member: TenantMember,
@@ -165,6 +187,14 @@ async fn upsert_invite(
     Ok(Some((invite, token)))
 }
 
+#[utoipa::path(get, path = "/{tenant_id}/invites", tag = "invites", params(("tenant_id" = Uuid, Path)),
+    security(("session" = [])), responses(
+    (status = 200, description = "The open invites.", body = Vec<Invite>),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 403, description = "email_not_verified", body = ErrorBody),
+    (status = 404, description = "not_found", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 async fn list_invites(
     State(state): State<AppState>,
     member: TenantMember,
@@ -190,6 +220,16 @@ async fn list_invites(
     Ok(Json(list))
 }
 
+// 404 also covers an invite ID that is not valid, or an invite that is not open.
+#[utoipa::path(delete, path = "/{tenant_id}/invites/{invite_id}", tag = "invites",
+    params(("tenant_id" = Uuid, Path), ("invite_id" = Uuid, Path)),
+    security(("session" = [])), responses(
+    (status = 204, description = "Invite cancelled."),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 403, description = "forbidden_origin, email_not_verified", body = ErrorBody),
+    (status = 404, description = "not_found", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 async fn cancel_invite(
     State(state): State<AppState>,
     member: TenantMember,
@@ -240,6 +280,11 @@ async fn account_exists(db: &impl ConnectionTrait, email: &str) -> Result<bool, 
         .is_some())
 }
 
+#[utoipa::path(get, path = "/{token}", tag = "invites", params(("token" = String, Path)), responses(
+    (status = 200, body = InvitePreview),
+    (status = 404, description = "not_found", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 async fn preview(
     State(state): State<AppState>,
     Path(token): Path<String>,
@@ -261,12 +306,26 @@ async fn preview(
     }))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 struct NewAccountBody {
     name: String,
     password: String,
 }
 
+/// Accept an invite. A logged-in user sends no body. A new user sends `NewAccountBody`.
+// Logged in: 403 invite_email_mismatch, 409 already_member.
+// Logged out: 401 unauthenticated if the account exists, 400 invalid_input for a bad body.
+#[utoipa::path(post, path = "/{token}/accept", tag = "invites", params(("token" = String, Path)),
+    request_body = NewAccountBody,
+    security((), ("session" = [])), responses(
+    (status = 200, description = "Joined. A new user also gets the session cookie.", body = AcceptedInvite),
+    (status = 400, description = "invalid_input", body = ErrorBody),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 403, description = "forbidden_origin, invite_email_mismatch", body = ErrorBody),
+    (status = 404, description = "not_found", body = ErrorBody),
+    (status = 409, description = "already_member", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 async fn accept(
     State(state): State<AppState>,
     MaybeUser(session): MaybeUser,

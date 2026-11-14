@@ -1,4 +1,5 @@
 pub mod config;
+pub mod entities;
 use axum::{
     Json, Router,
     extract::State,

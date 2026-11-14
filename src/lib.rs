@@ -3,6 +3,7 @@ pub mod config;
 pub mod email;
 pub mod entities;
 pub mod error;
+pub mod invites;
 pub mod json;
 pub mod rate_limit;
 pub mod tenants;
@@ -63,7 +64,11 @@ pub fn app(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .nest("/auth", auth::router())
-        .nest("/tenants", tenants::router())
+        .nest(
+            "/tenants",
+            tenants::router().merge(invites::tenant_routes()),
+        )
+        .nest("/invites", invites::public_router())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::session::load_session,

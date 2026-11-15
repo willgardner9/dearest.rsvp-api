@@ -127,6 +127,18 @@ cargo test --workspace
 
 Each integration test makes its own database on the server in `TEST_DATABASE_URL`. The default is `postgres://postgres:postgres@localhost:5432/postgres`. Run `docker compose down -v` to remove the test databases.
 
+## OpenAPI spec
+
+The file `openapi.json` holds the API spec. The code builds the spec in `src/openapi.rs`. The frontend copies `openapi.json` from this repo and makes its TypeScript client from it.
+
+Change the API, then write the file again:
+
+```bash
+cargo run --bin openapi > openapi.json
+```
+
+The command needs no database and no environment variable. The test `committed_spec_is_current` fails if `openapi.json` is old. CI runs this test.
+
 ## Git hooks
 
 The repository has Git hooks in `.githooks/`. Turn them on one time in each clone:

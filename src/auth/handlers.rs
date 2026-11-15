@@ -186,7 +186,7 @@ pub async fn logout(
 }
 
 #[utoipa::path(get, path = "/me", operation_id = "getMe", tag = "auth", security(("session" = [])), responses(
-    (status = 200, body = Me),
+    (status = 200, description = "The current user and the memberships.", body = Me),
     (status = 401, description = "unauthenticated", body = ErrorBody),
     (status = 500, description = "internal", body = ErrorBody),
 ))]

@@ -2,10 +2,6 @@
   "openapi": "3.1.0",
   "info": {
     "title": "dearest",
-    "description": "",
-    "license": {
-      "name": ""
-    },
     "version": "0.1.0"
   },
   "paths": {
@@ -136,6 +132,7 @@
         "operationId": "getMe",
         "responses": {
           "200": {
+            "description": "The current user and the memberships.",
             "content": {
               "application/json": {
                 "schema": {
@@ -550,6 +547,7 @@
         ],
         "responses": {
           "200": {
+            "description": "The invite details.",
             "content": {
               "application/json": {
                 "schema": {
@@ -705,6 +703,7 @@
         },
         "responses": {
           "201": {
+            "description": "Tenant made.",
             "content": {
               "application/json": {
                 "schema": {
@@ -780,6 +779,7 @@
         ],
         "responses": {
           "200": {
+            "description": "The tenant.",
             "content": {
               "application/json": {
                 "schema": {
@@ -942,6 +942,7 @@
         },
         "responses": {
           "201": {
+            "description": "Invite made.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1125,6 +1126,7 @@
         ],
         "responses": {
           "200": {
+            "description": "The members of the tenant.",
             "content": {
               "application/json": {
                 "schema": {

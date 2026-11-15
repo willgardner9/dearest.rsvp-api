@@ -39,7 +39,11 @@ pub fn router() -> OpenApiRouter<AppState> {
 
 /// The OpenAPI document. It needs no state and no database.
 pub fn spec() -> utoipa::openapi::OpenApi {
-    router().into_openapi()
+    let mut spec = router().into_openapi();
+    // Cargo gives an empty description and an empty license name. Remove them.
+    spec.info.description = None;
+    spec.info.license = None;
+    spec
 }
 
 #[cfg(test)]
@@ -51,6 +55,35 @@ mod tests {
     const METHODS: [&str; 9] = [
         "get", "put", "post", "delete", "options", "head", "patch", "trace", "query",
     ];
+
+    #[test]
+    fn every_response_has_a_description() {
+        let spec = serde_json::to_value(spec()).unwrap();
+        for (path, item) in spec["paths"].as_object().unwrap() {
+            for method in METHODS {
+                let Some(operation) = item.get(method) else {
+                    continue;
+                };
+                for (code, response) in operation["responses"].as_object().unwrap() {
+                    let description = response["description"].as_str().unwrap_or("");
+                    assert!(
+                        !description.is_empty(),
+                        "{method} {path} {code} has no description"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn info_has_no_empty_fields() {
+        let spec = serde_json::to_value(spec()).unwrap();
+        let info = &spec["info"];
+        assert!(info.get("license").is_none());
+        if let Some(description) = info.get("description") {
+            assert!(!description.as_str().unwrap().is_empty());
+        }
+    }
 
     #[test]
     fn spec_lists_every_route() {

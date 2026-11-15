@@ -36,7 +36,7 @@ struct CreateTenantBody {
 
 #[utoipa::path(post, path = "/", operation_id = "createTenant", tag = "tenants", request_body = CreateTenantBody,
     security(("session" = [])), responses(
-    (status = 201, body = Tenant),
+    (status = 201, description = "Tenant made.", body = Tenant),
     (status = 400, description = "invalid_input", body = ErrorBody),
     (status = 401, description = "unauthenticated", body = ErrorBody),
     (status = 403, description = "forbidden_origin, email_not_verified", body = ErrorBody),
@@ -78,7 +78,7 @@ async fn create_tenant(
 // `TenantMember` gives 404 for a bad ID, a missing tenant, and a tenant of someone else.
 #[utoipa::path(get, path = "/{tenant_id}", operation_id = "getTenant", tag = "tenants", params(("tenant_id" = Uuid, Path)),
     security(("session" = [])), responses(
-    (status = 200, body = Tenant),
+    (status = 200, description = "The tenant.", body = Tenant),
     (status = 401, description = "unauthenticated", body = ErrorBody),
     (status = 403, description = "email_not_verified", body = ErrorBody),
     (status = 404, description = "not_found", body = ErrorBody),
@@ -93,7 +93,7 @@ async fn get_tenant(member: TenantMember) -> Json<Tenant> {
 
 #[utoipa::path(get, path = "/{tenant_id}/members", operation_id = "listMembers", tag = "tenants", params(("tenant_id" = Uuid, Path)),
     security(("session" = [])), responses(
-    (status = 200, body = Vec<Member>),
+    (status = 200, description = "The members of the tenant.", body = Vec<Member>),
     (status = 401, description = "unauthenticated", body = ErrorBody),
     (status = 403, description = "email_not_verified", body = ErrorBody),
     (status = 404, description = "not_found", body = ErrorBody),

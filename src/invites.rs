@@ -73,7 +73,7 @@ struct InviteBody {
 
 #[utoipa::path(post, path = "/{tenant_id}/invites", operation_id = "createInvite", tag = "invites", params(("tenant_id" = Uuid, Path)),
     request_body = InviteBody, security(("session" = [])), responses(
-    (status = 201, body = CreatedInvite),
+    (status = 201, description = "Invite made.", body = CreatedInvite),
     (status = 400, description = "invalid_input", body = ErrorBody),
     (status = 401, description = "unauthenticated", body = ErrorBody),
     (status = 403, description = "forbidden_origin, email_not_verified", body = ErrorBody),
@@ -281,7 +281,7 @@ async fn account_exists(db: &impl ConnectionTrait, email: &str) -> Result<bool, 
 }
 
 #[utoipa::path(get, path = "/{token}", operation_id = "getInvitePreview", tag = "invites", params(("token" = String, Path)), responses(
-    (status = 200, body = InvitePreview),
+    (status = 200, description = "The invite details.", body = InvitePreview),
     (status = 404, description = "not_found", body = ErrorBody),
     (status = 500, description = "internal", body = ErrorBody),
 ))]

@@ -175,4 +175,26 @@ mod tests {
             serde_json::json!({"type": "apiKey", "in": "cookie", "name": COOKIE_NAME})
         );
     }
+
+    #[test]
+    fn health_lists_500() {
+        let spec = serde_json::to_value(spec()).unwrap();
+        let responses = spec["paths"]["/health"]["get"]["responses"]
+            .as_object()
+            .unwrap();
+        let codes: BTreeSet<&str> = responses.keys().map(String::as_str).collect();
+        assert_eq!(codes, BTreeSet::from(["200", "500", "503"]));
+    }
+
+    #[test]
+    fn invite_inviter_name_is_required_and_nullable() {
+        let spec = serde_json::to_value(spec()).unwrap();
+        let invite = &spec["components"]["schemas"]["Invite"];
+        let required = invite["required"].as_array().unwrap();
+        assert!(required.iter().any(|name| name == "invited_by_name"));
+        assert_eq!(
+            invite["properties"]["invited_by_name"]["type"],
+            serde_json::json!(["string", "null"])
+        );
+    }
 }

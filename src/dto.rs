@@ -50,6 +50,7 @@ pub struct CreatedInvite {
 pub struct Invite {
     pub id: Uuid,
     pub email: String,
+    #[schema(required = true)]
     pub invited_by_name: Option<String>,
     pub expires_at: DateTime<FixedOffset>,
 }

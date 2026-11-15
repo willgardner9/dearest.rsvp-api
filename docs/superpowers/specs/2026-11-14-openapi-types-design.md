@@ -42,7 +42,7 @@ The work is a failure, even if it compiles, if one of these is true:
 
 ## Constraints
 
-- Backend: axum 0.8, sea-orm 2, Rust edition 2024. Frontend: React 19, TanStack Query 5, TanStack Router, Vite+, TypeScript 6, yarn 4.
+- Backend: axum 0.8, sea-orm 2, Rust edition 2024. Frontend: React 19, TanStack Query 5, TanStack Router, Vite+, TypeScript 7, yarn 4. The generator needs the TypeScript 6 API. The frontend uses a work-around (see decision 7).
 - The session is an HttpOnly cookie. Every request needs `credentials: "include"`.
 - The backend rejects a write request from an origin that is not in `cors_allowed_origins`. The client must not remove the `Origin` header the browser sends.
 - Response bodies are built today with `json!({...})` and `serde_json::Value`. Only request bodies are real structs. The spec needs a named struct for each response.
@@ -121,6 +121,8 @@ Each step ends with a passing build and test run in its repository.
 4. **The cache logic stays hand-written.** `meKeys`, `setQueryData` on login and signup, `clearSession`, `refreshMe`, and the keep-the-me-query-on-logout fix stay as they are. Hooks call the generated SDK functions. Use the generated query options only where a hook has no custom cache logic.
 5. **The spec writer needs no database.** It builds the router and spec without `AppState`. The frontend commits a copy of `openapi.json` and generates from that copy. A script copies the file from the sibling backend repository. This avoids a cross-repository fetch in CI.
 6. **Shape tests come first.** Before the `json!` replacement, check that each route has a test that asserts the full response body. Add a test where one is missing. This is the proof that the JSON did not change (field names, `null`, uuid and date format).
+7. **Frontend uses TypeScript 7.** The generator needs the TypeScript 6 API. The repository adds a `typescript-6` package extension and an import hook for `api:generate` only. Remove both when the generator supports TypeScript 7.
+8. **The signed-in `accept` call sends no body.** It sent `{}` before. The backend ignores the body when a session exists.
 
 ## Left to the builder
 

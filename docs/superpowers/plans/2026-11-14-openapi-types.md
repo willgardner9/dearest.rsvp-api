@@ -6,7 +6,7 @@
 
 **Architecture:** Named response structs replace each `json!` response. `utoipa` and `utoipa-axum` build the spec from these structs and from annotated handlers. A test writes the spec to `openapi.json` and fails if the file is stale. The frontend commits a copy of that file and generates code with `@hey-api/openapi-ts`. The hand-written hooks keep their cache logic and call the generated SDK.
 
-**Tech Stack:** Rust 2024, axum 0.8, sea-orm 2, `utoipa`, `utoipa-axum`. React 19, TanStack Query 5, TypeScript 6, yarn 4, Vite+ (`vp`), `@hey-api/openapi-ts`.
+**Tech Stack:** Rust 2024, axum 0.8, sea-orm 2, `utoipa`, `utoipa-axum`. React 19, TanStack Query 5, TypeScript 7 (the generator needs the TypeScript 6 API, so the frontend uses a `typescript-6` package extension and an import hook for `api:generate`), yarn 4, Vite+ (`vp`), `@hey-api/openapi-ts`.
 
 **Spec:** `docs/superpowers/specs/2026-11-14-openapi-types-design.md` (in `dearest.rsvp-api`). Read it before you start.
 

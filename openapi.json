@@ -516,6 +516,16 @@
               }
             }
           },
+          "500": {
+            "description": "internal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "503": {
             "description": "The database is down.",
             "content": {
@@ -1298,6 +1308,7 @@
         "required": [
           "id",
           "email",
+          "invited_by_name",
           "expires_at"
         ],
         "properties": {

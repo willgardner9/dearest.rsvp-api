@@ -89,6 +89,7 @@ pub fn app(state: AppState) -> Router {
 
 #[utoipa::path(get, path = "/health", operation_id = "getHealth", tag = "health", responses(
     (status = 200, description = "The API and the database are up.", body = Health),
+    (status = 500, description = "internal", body = error::ErrorBody),
     (status = 503, description = "The database is down.", body = Health),
 ))]
 async fn health(State(state): State<AppState>) -> (StatusCode, Json<Health>) {

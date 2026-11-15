@@ -113,10 +113,18 @@ committed generated code reduce this risk.
 
 Each step ends with a passing build and test run in its repository.
 
+## Decisions made after review (Claude's calls, approved by Will)
+
+1. **Error behavior stays the same.** The generated client must throw `ApiError(status, body)` for a non-2xx response, as `apiFetch` does today. Use `throwOnError` and an error interceptor or a custom `fetch`. `fetchMe` keeps its 401 to `null` rule. An empty body (204 or 202) stays `null`. The pages and the tests in `src/api/*.test.ts` do not change their error handling.
+2. **Error lists are exact per route.** A route lists only the error codes it can return. Errors from layers and extractors apply to the routes they guard: `forbidden_origin` on every write route, `rate_limited` on the limited routes, `unauthenticated` on every session route. `/health` is a route in the spec, with its 200 and 503 bodies.
+3. **One source for the error codes.** Add an `ErrorCode` enum. `AppError::parts` uses it. `ErrorBody.error` has this type. The frontend `errorMessage` map is typed over the generated code type, so a new code is a visible gap. A missing message uses the existing fallback text.
+4. **The cache logic stays hand-written.** `meKeys`, `setQueryData` on login and signup, `clearSession`, `refreshMe`, and the keep-the-me-query-on-logout fix stay as they are. Hooks call the generated SDK functions. Use the generated query options only where a hook has no custom cache logic.
+5. **The spec writer needs no database.** It builds the router and spec without `AppState`. The frontend commits a copy of `openapi.json` and generates from that copy. A script copies the file from the sibling backend repository. This avoids a cross-repository fetch in CI.
+6. **Shape tests come first.** Before the `json!` replacement, check that each route has a test that asserts the full response body. Add a test where one is missing. This is the proof that the JSON did not change (field names, `null`, uuid and date format).
+
 ## Left to the builder
 
 - Exact struct and type names.
-- How the frontend gets the spec in CI: a copy of `openapi.json` committed to the frontend, a download from the backend repository at a fixed ref, or a git submodule. The builder picks the simplest option that CI can run. It states the choice in the plan.
 - Whether the spec writer is a binary, a flag, or a test helper.
 - The exact `utoipa` feature flags.
 - Whether the generated code uses the SDK functions directly or only the query options. The aim is the smallest change to the pages.

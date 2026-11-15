@@ -27,7 +27,7 @@ pub struct ResetRequestBody {
 
 /// Always answer `202`, so the answer does not show if an account exists.
 // A bad email and the per-email limit both answer 202, so 400 is only for a body that does not parse.
-#[utoipa::path(post, path = "/password-reset", tag = "auth", request_body = ResetRequestBody, responses(
+#[utoipa::path(post, path = "/password-reset", operation_id = "requestPasswordReset", tag = "auth", request_body = ResetRequestBody, responses(
     (status = 202, description = "Accepted. An email goes out if the account exists."),
     (status = 400, description = "invalid_input", body = ErrorBody),
     (status = 403, description = "forbidden_origin", body = ErrorBody),
@@ -87,7 +87,7 @@ pub struct ConfirmBody {
 }
 
 /// Set a new password, use the token, mark the email as verified, and end all sessions.
-#[utoipa::path(post, path = "/password-reset/confirm", tag = "auth", request_body = ConfirmBody, responses(
+#[utoipa::path(post, path = "/password-reset/confirm", operation_id = "confirmPasswordReset", tag = "auth", request_body = ConfirmBody, responses(
     (status = 204, description = "Password changed. Ends all sessions and clears the cookie."),
     (status = 400, description = "invalid_input, invalid_token", body = ErrorBody),
     (status = 403, description = "forbidden_origin", body = ErrorBody),

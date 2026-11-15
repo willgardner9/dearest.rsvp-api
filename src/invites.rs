@@ -71,7 +71,7 @@ struct InviteBody {
     email: String,
 }
 
-#[utoipa::path(post, path = "/{tenant_id}/invites", tag = "invites", params(("tenant_id" = Uuid, Path)),
+#[utoipa::path(post, path = "/{tenant_id}/invites", operation_id = "createInvite", tag = "invites", params(("tenant_id" = Uuid, Path)),
     request_body = InviteBody, security(("session" = [])), responses(
     (status = 201, body = CreatedInvite),
     (status = 400, description = "invalid_input", body = ErrorBody),
@@ -187,7 +187,7 @@ async fn upsert_invite(
     Ok(Some((invite, token)))
 }
 
-#[utoipa::path(get, path = "/{tenant_id}/invites", tag = "invites", params(("tenant_id" = Uuid, Path)),
+#[utoipa::path(get, path = "/{tenant_id}/invites", operation_id = "listInvites", tag = "invites", params(("tenant_id" = Uuid, Path)),
     security(("session" = [])), responses(
     (status = 200, description = "The open invites.", body = Vec<Invite>),
     (status = 401, description = "unauthenticated", body = ErrorBody),
@@ -221,7 +221,7 @@ async fn list_invites(
 }
 
 // 404 also covers an invite ID that is not valid, or an invite that is not open.
-#[utoipa::path(delete, path = "/{tenant_id}/invites/{invite_id}", tag = "invites",
+#[utoipa::path(delete, path = "/{tenant_id}/invites/{invite_id}", operation_id = "cancelInvite", tag = "invites",
     params(("tenant_id" = Uuid, Path), ("invite_id" = Uuid, Path)),
     security(("session" = [])), responses(
     (status = 204, description = "Invite cancelled."),
@@ -280,7 +280,7 @@ async fn account_exists(db: &impl ConnectionTrait, email: &str) -> Result<bool, 
         .is_some())
 }
 
-#[utoipa::path(get, path = "/{token}", tag = "invites", params(("token" = String, Path)), responses(
+#[utoipa::path(get, path = "/{token}", operation_id = "getInvitePreview", tag = "invites", params(("token" = String, Path)), responses(
     (status = 200, body = InvitePreview),
     (status = 404, description = "not_found", body = ErrorBody),
     (status = 500, description = "internal", body = ErrorBody),
@@ -315,7 +315,7 @@ struct NewAccountBody {
 /// Accept an invite. A logged-in user sends no body. A new user sends `NewAccountBody`.
 // Logged in: 403 invite_email_mismatch, 409 already_member.
 // Logged out: 401 unauthenticated if the account exists, 400 invalid_input for a bad body.
-#[utoipa::path(post, path = "/{token}/accept", tag = "invites", params(("token" = String, Path)),
+#[utoipa::path(post, path = "/{token}/accept", operation_id = "acceptInvite", tag = "invites", params(("token" = String, Path)),
     request_body = NewAccountBody,
     security((), ("session" = [])), responses(
     (status = 200, description = "Joined. A new user also gets the session cookie.", body = AcceptedInvite),

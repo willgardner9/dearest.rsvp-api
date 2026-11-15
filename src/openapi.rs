@@ -89,6 +89,41 @@ mod tests {
     }
 
     #[test]
+    fn operation_ids_are_unique_and_named() {
+        let mut ids = Vec::new();
+        for (_, item) in spec().paths.paths {
+            let item = serde_json::to_value(item).unwrap();
+            for method in METHODS {
+                if let Some(id) = item.get(method).and_then(|op| op.get("operationId")) {
+                    ids.push(id.as_str().unwrap().to_owned());
+                }
+            }
+        }
+        ids.sort();
+        let mut expected = vec![
+            "getHealth",
+            "signup",
+            "login",
+            "logout",
+            "getMe",
+            "verifyEmail",
+            "resendVerificationEmail",
+            "requestPasswordReset",
+            "confirmPasswordReset",
+            "createTenant",
+            "getTenant",
+            "listMembers",
+            "createInvite",
+            "listInvites",
+            "cancelInvite",
+            "getInvitePreview",
+            "acceptInvite",
+        ];
+        expected.sort();
+        assert_eq!(ids, expected);
+    }
+
+    #[test]
     fn accept_body_is_optional() {
         let spec = serde_json::to_value(spec()).unwrap();
         let body = &spec["paths"]["/invites/{token}/accept"]["post"]["requestBody"];

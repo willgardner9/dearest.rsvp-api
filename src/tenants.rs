@@ -34,7 +34,7 @@ struct CreateTenantBody {
     name: String,
 }
 
-#[utoipa::path(post, path = "/", tag = "tenants", request_body = CreateTenantBody,
+#[utoipa::path(post, path = "/", operation_id = "createTenant", tag = "tenants", request_body = CreateTenantBody,
     security(("session" = [])), responses(
     (status = 201, body = Tenant),
     (status = 400, description = "invalid_input", body = ErrorBody),
@@ -76,7 +76,7 @@ async fn create_tenant(
 }
 
 // `TenantMember` gives 404 for a bad ID, a missing tenant, and a tenant of someone else.
-#[utoipa::path(get, path = "/{tenant_id}", tag = "tenants", params(("tenant_id" = Uuid, Path)),
+#[utoipa::path(get, path = "/{tenant_id}", operation_id = "getTenant", tag = "tenants", params(("tenant_id" = Uuid, Path)),
     security(("session" = [])), responses(
     (status = 200, body = Tenant),
     (status = 401, description = "unauthenticated", body = ErrorBody),
@@ -91,7 +91,7 @@ async fn get_tenant(member: TenantMember) -> Json<Tenant> {
     })
 }
 
-#[utoipa::path(get, path = "/{tenant_id}/members", tag = "tenants", params(("tenant_id" = Uuid, Path)),
+#[utoipa::path(get, path = "/{tenant_id}/members", operation_id = "listMembers", tag = "tenants", params(("tenant_id" = Uuid, Path)),
     security(("session" = [])), responses(
     (status = 200, body = Vec<Member>),
     (status = 401, description = "unauthenticated", body = ErrorBody),

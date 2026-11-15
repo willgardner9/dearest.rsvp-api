@@ -57,7 +57,7 @@ pub struct SignupBody {
     name: String,
 }
 
-#[utoipa::path(post, path = "/signup", tag = "auth", request_body = SignupBody, responses(
+#[utoipa::path(post, path = "/signup", operation_id = "signup", tag = "auth", request_body = SignupBody, responses(
     (status = 201, description = "Account made. Sets the session cookie.", body = Me),
     (status = 400, description = "invalid_input", body = ErrorBody),
     (status = 403, description = "forbidden_origin", body = ErrorBody),
@@ -125,7 +125,7 @@ pub struct LoginBody {
     password: String,
 }
 
-#[utoipa::path(post, path = "/login", tag = "auth", request_body = LoginBody, responses(
+#[utoipa::path(post, path = "/login", operation_id = "login", tag = "auth", request_body = LoginBody, responses(
     (status = 200, description = "Logged in. Sets the session cookie.", body = Me),
     (status = 400, description = "invalid_input", body = ErrorBody),
     (status = 401, description = "invalid_credentials", body = ErrorBody),
@@ -166,7 +166,7 @@ pub async fn login(
 }
 
 // Logout reads the cookie itself and works with no session, so the cookie is optional.
-#[utoipa::path(post, path = "/logout", tag = "auth", security((), ("session" = [])), responses(
+#[utoipa::path(post, path = "/logout", operation_id = "logout", tag = "auth", security((), ("session" = [])), responses(
     (status = 204, description = "Logged out. Clears the session cookie."),
     (status = 403, description = "forbidden_origin", body = ErrorBody),
     (status = 500, description = "internal", body = ErrorBody),
@@ -185,7 +185,7 @@ pub async fn logout(
     Ok((StatusCode::NO_CONTENT, jar))
 }
 
-#[utoipa::path(get, path = "/me", tag = "auth", security(("session" = [])), responses(
+#[utoipa::path(get, path = "/me", operation_id = "getMe", tag = "auth", security(("session" = [])), responses(
     (status = 200, body = Me),
     (status = 401, description = "unauthenticated", body = ErrorBody),
     (status = 500, description = "internal", body = ErrorBody),

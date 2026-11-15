@@ -87,7 +87,7 @@ pub fn app(state: AppState) -> Router {
         .layer(cors)
 }
 
-#[utoipa::path(get, path = "/health", tag = "health", responses(
+#[utoipa::path(get, path = "/health", operation_id = "getHealth", tag = "health", responses(
     (status = 200, description = "The API and the database are up.", body = Health),
     (status = 503, description = "The database is down.", body = Health),
 ))]

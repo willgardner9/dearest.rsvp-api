@@ -19,7 +19,7 @@ pub struct TokenBody {
 }
 
 /// Use a verification token one time. A second use gives `invalid_token`.
-#[utoipa::path(post, path = "/verify-email", tag = "auth", request_body = TokenBody, responses(
+#[utoipa::path(post, path = "/verify-email", operation_id = "verifyEmail", tag = "auth", request_body = TokenBody, responses(
     (status = 204, description = "Email verified."),
     (status = 400, description = "invalid_input, invalid_token", body = ErrorBody),
     (status = 403, description = "forbidden_origin", body = ErrorBody),
@@ -39,7 +39,7 @@ pub async fn verify_email(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(post, path = "/verify-email/resend", tag = "auth", security(("session" = [])), responses(
+#[utoipa::path(post, path = "/verify-email/resend", operation_id = "resendVerificationEmail", tag = "auth", security(("session" = [])), responses(
     (status = 204, description = "Email sent, or the email is already verified."),
     (status = 401, description = "unauthenticated", body = ErrorBody),
     (status = 403, description = "forbidden_origin", body = ErrorBody),

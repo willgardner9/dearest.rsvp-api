@@ -1,12 +1,9 @@
-use axum::{
-    Router,
-    routing::{get, post},
-};
 use chrono::{Duration, Utc};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
     Set, TransactionTrait, sea_query::Expr,
 };
+use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
 use crate::{
@@ -30,16 +27,16 @@ pub const PURPOSE_VERIFY_EMAIL: &str = "verify_email";
 pub const PURPOSE_RESET_PASSWORD: &str = "reset_password";
 
 /// The routes under `/auth`.
-pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/signup", post(handlers::signup))
-        .route("/login", post(handlers::login))
-        .route("/logout", post(handlers::logout))
-        .route("/me", get(handlers::me))
-        .route("/verify-email", post(verify::verify_email))
-        .route("/verify-email/resend", post(verify::resend))
-        .route("/password-reset", post(reset::request_reset))
-        .route("/password-reset/confirm", post(reset::confirm_reset))
+pub fn router() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(handlers::signup))
+        .routes(routes!(handlers::login))
+        .routes(routes!(handlers::logout))
+        .routes(routes!(handlers::me))
+        .routes(routes!(verify::verify_email))
+        .routes(routes!(verify::resend))
+        .routes(routes!(reset::request_reset))
+        .routes(routes!(reset::confirm_reset))
 }
 
 /// Replace the unused tokens of the user for `purpose` with a new one that

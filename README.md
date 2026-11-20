@@ -127,6 +127,27 @@ cargo test --workspace
 
 Each integration test makes its own database on the server in `TEST_DATABASE_URL`. The default is `postgres://postgres:postgres@localhost:5432/postgres`. Run `docker compose down -v` to remove the test databases.
 
+## OpenAPI spec
+
+The server sends the API spec at `GET /openapi.json`. The code builds the spec in `src/openapi.rs`. No file in this repository holds a copy.
+
+Other repositories make their API client from the deployed spec at `https://api.dearest.rsvp/openapi.json`. They do not keep a copy. A change to the API reaches a client after the API deploys.
+
+```mermaid
+flowchart LR
+    code["Rust code and utoipa annotations"] --> route["GET /openapi.json"]
+    route --> live["api.dearest.rsvp"]
+    live --> web["dearest.rsvp-web: yarn install makes the client"]
+    live --> other["Future repository: makes its own client"]
+```
+
+Run the API on your computer and read `http://localhost:3000/openapi.json` to see a change before it deploys.
+
+Two checks keep the spec usable:
+
+- The tests in `tests/openapi_route.rs` and `src/openapi.rs` run in CI on each pull request.
+- The `publish` job calls the deployed `/openapi.json` after each deploy and fails if the spec is not usable.
+
 ## Git hooks
 
 The repository has Git hooks in `.githooks/`. Turn them on one time in each clone:

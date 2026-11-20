@@ -1,11 +1,13 @@
 pub mod auth;
 pub mod cleanup;
 pub mod config;
+pub mod dto;
 pub mod email;
 pub mod entities;
 pub mod error;
 pub mod invites;
 pub mod json;
+pub mod openapi;
 pub mod rate_limit;
 pub mod tenants;
 
@@ -19,11 +21,10 @@ use axum::{
     routing::get,
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection};
-use serde_json::{Value, json};
 use tokio_util::task::TaskTracker;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-use crate::{config::Config, email::EmailSender, rate_limit::RateLimits};
+use crate::{config::Config, dto::Health, email::EmailSender, rate_limit::RateLimits};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -62,14 +63,10 @@ pub fn app(state: AppState) -> Router {
         .allow_credentials(true)
         .max_age(Duration::from_secs(3600));
 
-    Router::new()
-        .route("/health", get(health))
-        .nest("/auth", auth::router())
-        .nest(
-            "/tenants",
-            tenants::router().merge(invites::tenant_routes()),
-        )
-        .nest("/invites", invites::public_router())
+    let (router, spec) = openapi::router_and_spec();
+    router
+        // Clients make their code from this document. See the README.
+        .route("/openapi.json", get(move || async move { Json(spec) }))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::session::load_session,
@@ -93,14 +90,28 @@ pub fn app(state: AppState) -> Router {
         .layer(cors)
 }
 
-async fn health(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
+#[utoipa::path(get, path = "/health", operation_id = "getHealth", tag = "health", responses(
+    (status = 200, description = "The API and the database are up.", body = Health),
+    (status = 500, description = "internal", body = error::ErrorBody),
+    (status = 503, description = "The database is down.", body = Health),
+))]
+async fn health(State(state): State<AppState>) -> (StatusCode, Json<Health>) {
     match state.db.execute_unprepared("SELECT 1").await {
-        Ok(_) => (StatusCode::OK, Json(json!({ "status": "ok", "db": "up" }))),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(Health {
+                status: "ok".into(),
+                db: "up".into(),
+            }),
+        ),
         Err(err) => {
             tracing::error!("health check db error: {err}");
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({ "status": "degraded", "db": "down" })),
+                Json(Health {
+                    status: "degraded".into(),
+                    db: "down".into(),
+                }),
             )
         }
     }

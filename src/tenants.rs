@@ -1,15 +1,11 @@
-use axum::{
-    Json, Router,
-    extract::State,
-    http::StatusCode,
-    routing::{get, post},
-};
+use axum::{Json, extract::State, http::StatusCode};
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set, TransactionTrait,
 };
 use serde::Deserialize;
-use serde_json::{Value, json};
+use utoipa::ToSchema;
+use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
 use crate::{
@@ -18,30 +14,39 @@ use crate::{
         extract::{TenantMember, VerifiedUser},
         validate::validate_text,
     },
+    dto::{Member, Tenant},
     entities::{tenants, user_tenant_memberships, users},
-    error::AppResult,
+    error::{AppResult, ErrorBody},
     json::ApiJson,
 };
 
 const MAX_TENANT_NAME_LEN: usize = 200;
 
-pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/", post(create_tenant))
-        .route("/{tenant_id}", get(get_tenant))
-        .route("/{tenant_id}/members", get(list_members))
+pub fn router() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(create_tenant))
+        .routes(routes!(get_tenant))
+        .routes(routes!(list_members))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 struct CreateTenantBody {
     name: String,
 }
 
+#[utoipa::path(post, path = "/", operation_id = "createTenant", tag = "tenants", request_body = CreateTenantBody,
+    security(("session" = [])), responses(
+    (status = 201, description = "Tenant made.", body = Tenant),
+    (status = 400, description = "invalid_input", body = ErrorBody),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 403, description = "forbidden_origin, email_not_verified", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 async fn create_tenant(
     State(state): State<AppState>,
     VerifiedUser(session): VerifiedUser,
     ApiJson(body): ApiJson<CreateTenantBody>,
-) -> AppResult<(StatusCode, Json<Value>)> {
+) -> AppResult<(StatusCode, Json<Tenant>)> {
     let name = validate_text(&body.name, MAX_TENANT_NAME_LEN)?;
     let now = Utc::now().fixed_offset();
     let txn = state.db.begin().await?;
@@ -63,28 +68,55 @@ async fn create_tenant(
     txn.commit().await?;
     Ok((
         StatusCode::CREATED,
-        Json(json!({ "id": tenant.id, "name": tenant.name })),
+        Json(Tenant {
+            id: tenant.id,
+            name: tenant.name,
+        }),
     ))
 }
 
-async fn get_tenant(member: TenantMember) -> Json<Value> {
-    Json(json!({ "id": member.tenant.id, "name": member.tenant.name }))
+// `TenantMember` gives 404 for a bad ID, a missing tenant, and a tenant of someone else.
+#[utoipa::path(get, path = "/{tenant_id}", operation_id = "getTenant", tag = "tenants", params(("tenant_id" = Uuid, Path)),
+    security(("session" = [])), responses(
+    (status = 200, description = "The tenant.", body = Tenant),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 403, description = "email_not_verified", body = ErrorBody),
+    (status = 404, description = "not_found", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
+async fn get_tenant(member: TenantMember) -> Json<Tenant> {
+    Json(Tenant {
+        id: member.tenant.id,
+        name: member.tenant.name,
+    })
 }
 
+#[utoipa::path(get, path = "/{tenant_id}/members", operation_id = "listMembers", tag = "tenants", params(("tenant_id" = Uuid, Path)),
+    security(("session" = [])), responses(
+    (status = 200, description = "The members of the tenant.", body = Vec<Member>),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 403, description = "email_not_verified", body = ErrorBody),
+    (status = 404, description = "not_found", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 async fn list_members(
     State(state): State<AppState>,
     member: TenantMember,
-) -> AppResult<Json<Value>> {
+) -> AppResult<Json<Vec<Member>>> {
     let rows = user_tenant_memberships::Entity::find()
         .filter(user_tenant_memberships::Column::TenantId.eq(member.tenant.id))
         .order_by_asc(user_tenant_memberships::Column::CreatedAt)
         .find_also_related(users::Entity)
         .all(&state.db)
         .await?;
-    let members: Vec<Value> = rows
+    let members: Vec<Member> = rows
         .into_iter()
         .filter_map(|(_, user)| user)
-        .map(|user| json!({ "user_id": user.id, "name": user.name, "email": user.email }))
+        .map(|user| Member {
+            user_id: user.id,
+            name: user.name,
+            email: user.email,
+        })
         .collect();
-    Ok(Json(Value::Array(members)))
+    Ok(Json(members))
 }

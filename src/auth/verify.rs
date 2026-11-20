@@ -1,23 +1,31 @@
 use axum::{extract::State, http::StatusCode};
 use sea_orm::TransactionTrait;
 use serde::Deserialize;
+use utoipa::ToSchema;
 
 use super::{
     PURPOSE_VERIFY_EMAIL, claim_token, extract::AnyUser, mark_verified, send_verification,
 };
 use crate::{
     AppState,
-    error::AppResult,
+    error::{AppResult, ErrorBody},
     json::ApiJson,
     rate_limit::{ClientIp, check},
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct TokenBody {
     token: String,
 }
 
 /// Use a verification token one time. A second use gives `invalid_token`.
+#[utoipa::path(post, path = "/verify-email", operation_id = "verifyEmail", tag = "auth", request_body = TokenBody, responses(
+    (status = 204, description = "Email verified."),
+    (status = 400, description = "invalid_input, invalid_token", body = ErrorBody),
+    (status = 403, description = "forbidden_origin", body = ErrorBody),
+    (status = 429, description = "rate_limited", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 pub async fn verify_email(
     State(state): State<AppState>,
     ClientIp(ip): ClientIp,
@@ -31,6 +39,13 @@ pub async fn verify_email(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(post, path = "/verify-email/resend", operation_id = "resendVerificationEmail", tag = "auth", security(("session" = [])), responses(
+    (status = 204, description = "Email sent, or the email is already verified."),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 403, description = "forbidden_origin", body = ErrorBody),
+    (status = 429, description = "rate_limited", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 pub async fn resend(
     State(state): State<AppState>,
     AnyUser(session): AnyUser,

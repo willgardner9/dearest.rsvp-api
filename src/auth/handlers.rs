@@ -6,7 +6,7 @@ use sea_orm::{
     QueryOrder, Set, SqlErr, TransactionTrait,
 };
 use serde::Deserialize;
-use serde_json::{Value, json};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::{
@@ -19,45 +19,57 @@ use super::{
 };
 use crate::{
     AppState,
+    dto::{Me, MeUser, MembershipSummary},
     entities::{sessions, tenants, users},
-    error::{AppError, AppResult},
+    error::{AppError, AppResult, ErrorBody},
     json::ApiJson,
     rate_limit::{ClientIp, check},
 };
 
 /// The body of `GET /auth/me`, also returned by signup and login.
-pub async fn me_body(db: &impl ConnectionTrait, user: &users::Model) -> AppResult<Value> {
+pub async fn me_body(db: &impl ConnectionTrait, user: &users::Model) -> AppResult<Me> {
     let memberships = user
         .find_related(tenants::Entity)
         .order_by_asc(tenants::Column::Name)
         .all(db)
         .await?;
-    Ok(json!({
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "name": user.name,
-            "email_verified": user.email_verified_at.is_some(),
+    Ok(Me {
+        user: MeUser {
+            id: user.id,
+            email: user.email.clone(),
+            name: user.name.clone(),
+            email_verified: user.email_verified_at.is_some(),
         },
-        "memberships": memberships
-            .iter()
-            .map(|tenant| json!({ "tenant_id": tenant.id, "tenant_name": tenant.name }))
-            .collect::<Vec<_>>(),
-    }))
+        memberships: memberships
+            .into_iter()
+            .map(|tenant| MembershipSummary {
+                tenant_id: tenant.id,
+                tenant_name: tenant.name,
+            })
+            .collect(),
+    })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct SignupBody {
     email: String,
     password: String,
     name: String,
 }
 
+#[utoipa::path(post, path = "/signup", operation_id = "signup", tag = "auth", request_body = SignupBody, responses(
+    (status = 201, description = "Account made. Sets the session cookie.", body = Me),
+    (status = 400, description = "invalid_input", body = ErrorBody),
+    (status = 403, description = "forbidden_origin", body = ErrorBody),
+    (status = 409, description = "email_taken", body = ErrorBody),
+    (status = 429, description = "rate_limited", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 pub async fn signup(
     State(state): State<AppState>,
     ClientIp(ip): ClientIp,
     ApiJson(body): ApiJson<SignupBody>,
-) -> AppResult<(StatusCode, CookieJar, Json<Value>)> {
+) -> AppResult<(StatusCode, CookieJar, Json<Me>)> {
     check(&state.limits.signup_ip, &ip)?;
     let email = normalize_email(&body.email)?;
     let name = validate_name(&body.name)?;
@@ -107,17 +119,25 @@ pub async fn signup(
     Ok((StatusCode::CREATED, jar, Json(body)))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct LoginBody {
     email: String,
     password: String,
 }
 
+#[utoipa::path(post, path = "/login", operation_id = "login", tag = "auth", request_body = LoginBody, responses(
+    (status = 200, description = "Logged in. Sets the session cookie.", body = Me),
+    (status = 400, description = "invalid_input", body = ErrorBody),
+    (status = 401, description = "invalid_credentials", body = ErrorBody),
+    (status = 403, description = "forbidden_origin", body = ErrorBody),
+    (status = 429, description = "rate_limited", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 pub async fn login(
     State(state): State<AppState>,
     ClientIp(ip): ClientIp,
     ApiJson(body): ApiJson<LoginBody>,
-) -> AppResult<(CookieJar, Json<Value>)> {
+) -> AppResult<(CookieJar, Json<Me>)> {
     check(&state.limits.login_ip, &ip)?;
     // An email that cannot be valid is an unknown email: the answer is the same.
     let user = match normalize_email(&body.email) {
@@ -145,6 +165,12 @@ pub async fn login(
     Ok((jar, Json(me_body(&state.db, &user).await?)))
 }
 
+// Logout reads the cookie itself and works with no session, so the cookie is optional.
+#[utoipa::path(post, path = "/logout", operation_id = "logout", tag = "auth", security((), ("session" = [])), responses(
+    (status = 204, description = "Logged out. Clears the session cookie."),
+    (status = 403, description = "forbidden_origin", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
 pub async fn logout(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -159,9 +185,11 @@ pub async fn logout(
     Ok((StatusCode::NO_CONTENT, jar))
 }
 
-pub async fn me(
-    State(state): State<AppState>,
-    AnyUser(session): AnyUser,
-) -> AppResult<Json<Value>> {
+#[utoipa::path(get, path = "/me", operation_id = "getMe", tag = "auth", security(("session" = [])), responses(
+    (status = 200, description = "The current user and the memberships.", body = Me),
+    (status = 401, description = "unauthenticated", body = ErrorBody),
+    (status = 500, description = "internal", body = ErrorBody),
+))]
+pub async fn me(State(state): State<AppState>, AnyUser(session): AnyUser) -> AppResult<Json<Me>> {
     Ok(Json(me_body(&state.db, &session.user).await?))
 }

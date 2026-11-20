@@ -26,6 +26,8 @@ tokio-util = { version = "0.7.20", features = ["rt"] }
 tower-http = { version = "0.7.1", features = ["trace", "cors"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+utoipa = { version = "6.0.0", features = ["uuid", "chrono"] }
+utoipa-axum = "0.3.0"
 uuid = { version = "1.29.2", features = ["v7", "serde"] }
 
 [workspace]
@@ -36,3 +38,12 @@ http-body-util = "0.1.5"
 sea-orm = { version = "2.0.4", features = ["mock"] }
 tower = { version = "0.5.3", features = ["util"] }
 uuid = { version = "1.29.2", features = ["v4"] }
+
+# Argon2 is slow without optimization. A login takes about 300 ms in a debug build.
+# Rate limit tests send 11 logins, and the limiter refills one token every 6 s.
+# A slow build lets a token refill, and the test then fails.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

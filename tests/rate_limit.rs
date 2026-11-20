@@ -133,14 +133,23 @@ async fn reset_email_limit_still_returns_202() {
             .await;
         assert_eq!(response.status, StatusCode::ACCEPTED, "request {i}");
     }
+    let count_resets = || {
+        app.email
+            .sent()
+            .into_iter()
+            .filter(|email| email.subject == "Reset your Dearest password")
+            .count()
+    };
+    // The send runs on a background task. Wait until the 3 allowed emails arrive.
+    for _ in 0..500 {
+        if count_resets() >= 3 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    // Wait a short time more, so a 4th email (the bug) has time to arrive.
     tokio::time::sleep(Duration::from_millis(200)).await;
-    let resets = app
-        .email
-        .sent()
-        .into_iter()
-        .filter(|email| email.subject == "Reset your Dearest password")
-        .count();
-    assert_eq!(resets, 3);
+    assert_eq!(count_resets(), 3);
 }
 
 #[tokio::test]

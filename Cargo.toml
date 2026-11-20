@@ -38,3 +38,12 @@ http-body-util = "0.1.5"
 sea-orm = { version = "2.0.4", features = ["mock"] }
 tower = { version = "0.5.3", features = ["util"] }
 uuid = { version = "1.29.2", features = ["v4"] }
+
+# Argon2 is slow without optimization. A login takes about 300 ms in a debug build.
+# Rate limit tests send 11 logins, and the limiter refills one token every 6 s.
+# A slow build lets a token refill, and the test then fails.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

@@ -1,5 +1,6 @@
 //! The OpenAPI document of the API. The served router and the spec come from one function.
 
+use axum::Router;
 use utoipa::{
     Modify, OpenApi,
     openapi::security::{ApiKey, ApiKeyValue, SecurityScheme},
@@ -37,13 +38,19 @@ pub fn router() -> OpenApiRouter<AppState> {
         .nest("/invites", invites::public_router())
 }
 
-/// The OpenAPI document. It needs no state and no database.
-pub fn spec() -> utoipa::openapi::OpenApi {
-    let mut spec = router().into_openapi();
+/// The routes of the API and the OpenAPI document of those routes.
+/// The server sends the same document at `/openapi.json`.
+pub fn router_and_spec() -> (Router<AppState>, utoipa::openapi::OpenApi) {
+    let (router, mut spec) = router().split_for_parts();
     // Cargo gives an empty description and an empty license name. Remove them.
     spec.info.description = None;
     spec.info.license = None;
-    spec
+    (router, spec)
+}
+
+/// The OpenAPI document. It needs no state and no database.
+pub fn spec() -> utoipa::openapi::OpenApi {
+    router_and_spec().1
 }
 
 #[cfg(test)]

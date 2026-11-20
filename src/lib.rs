@@ -18,6 +18,7 @@ use axum::{
     extract::{MatchedPath, Request, State},
     http::{Method, StatusCode, header},
     middleware,
+    routing::get,
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection};
 use tokio_util::task::TaskTracker;
@@ -62,8 +63,10 @@ pub fn app(state: AppState) -> Router {
         .allow_credentials(true)
         .max_age(Duration::from_secs(3600));
 
-    let (router, _) = openapi::router().split_for_parts();
+    let (router, spec) = openapi::router_and_spec();
     router
+        // Clients make their code from this document. See the README.
+        .route("/openapi.json", get(move || async move { Json(spec) }))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::session::load_session,

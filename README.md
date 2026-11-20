@@ -129,15 +129,24 @@ Each integration test makes its own database on the server in `TEST_DATABASE_URL
 
 ## OpenAPI spec
 
-The file `openapi.json` holds the API spec. The code builds the spec in `src/openapi.rs`. The frontend copies `openapi.json` from this repo and makes its TypeScript client from it.
+The server sends the API spec at `GET /openapi.json`. The code builds the spec in `src/openapi.rs`. No file in this repository holds a copy.
 
-Change the API, then write the file again:
+Other repositories make their API client from the deployed spec at `https://api.dearest.rsvp/openapi.json`. They do not keep a copy. A change to the API reaches a client after the API deploys.
 
-```bash
-cargo run --bin openapi > openapi.json
+```mermaid
+flowchart LR
+    code["Rust code and utoipa annotations"] --> route["GET /openapi.json"]
+    route --> live["api.dearest.rsvp"]
+    live --> web["dearest.rsvp-web: yarn install makes the client"]
+    live --> other["Future repository: makes its own client"]
 ```
 
-The command needs no database and no environment variable. The test `committed_spec_is_current` fails if `openapi.json` is old. CI runs this test.
+Run the API on your computer and read `http://localhost:3000/openapi.json` to see a change before it deploys.
+
+Two checks keep the spec usable:
+
+- The tests in `tests/openapi_route.rs` and `src/openapi.rs` run in CI on each pull request.
+- The `publish` job calls the deployed `/openapi.json` after each deploy and fails if the spec is not usable.
 
 ## Git hooks
 

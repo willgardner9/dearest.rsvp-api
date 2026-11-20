@@ -89,3 +89,18 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Trigger Dokploy deploy
         run: curl -fsS -X POST "${{ secrets.DOKPLOY_WEBHOOK_URL }}"
+      # Frontend builds read the spec from the deployed API. Check that the API
+      # sends a usable spec. Dokploy deploys after the webhook, so try for 5 minutes.
+      # The check can pass on the old container before the new container starts.
+      - name: Check the deployed spec
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS https://api.dearest.rsvp/openapi.json | jq -e '.openapi and (.paths | length > 0)' >/dev/null; then
+              echo "The deployed API sends a usable spec."
+              exit 0
+            fi
+            echo "Attempt $attempt failed. Wait 10 seconds."
+            sleep 10
+          done
+          echo "The deployed API does not send a usable spec." >&2
+          exit 1

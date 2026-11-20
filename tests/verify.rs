@@ -117,12 +117,8 @@ async fn resend_invalidates_older_token() {
     let app = TestApp::spawn().await;
     let (cookie, first) = signup(&app).await;
     assert_eq!(resend(&app, &cookie).await.status, StatusCode::NO_CONTENT);
-    for _ in 0..100 {
-        if app.email.sent().len() == 2 {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
+    app.settle().await;
+    assert_eq!(app.email.sent().len(), 2);
     let second = extract_token(&app.email.last_to(EMAIL).unwrap());
     assert_ne!(first, second);
     assert_eq!(
@@ -142,7 +138,7 @@ async fn resend_when_verified_sends_nothing() {
     verify(&app, &token, None).await;
     let count = app.email.sent().len();
     assert_eq!(resend(&app, &cookie).await.status, StatusCode::NO_CONTENT);
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    app.settle().await;
     assert_eq!(app.email.sent().len(), count);
 }
 

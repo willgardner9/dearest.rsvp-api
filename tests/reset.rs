@@ -1,7 +1,5 @@
 mod common;
 
-use std::time::Duration;
-
 use axum::http::{Method, StatusCode};
 use common::{TestApp, TestResponse};
 use dearest::email::{Email, templates::extract_token};
@@ -62,14 +60,14 @@ fn reset_emails(app: &TestApp, to: &str) -> Vec<Email> {
 
 /// Wait until `count` reset emails exist for `to`, then return them.
 async fn wait_for_resets(app: &TestApp, to: &str, count: usize) -> Vec<Email> {
-    for _ in 0..100 {
-        let emails = reset_emails(app, to);
-        if emails.len() >= count {
-            return emails;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    panic!("expected {count} reset emails to {to}");
+    app.settle().await;
+    let emails = reset_emails(app, to);
+    assert!(
+        emails.len() >= count,
+        "expected {count} reset emails to {to}, got {}",
+        emails.len()
+    );
+    emails
 }
 
 #[tokio::test]
@@ -77,7 +75,7 @@ async fn reset_request_for_unknown_email_returns_202_and_sends_nothing() {
     let app = TestApp::spawn().await;
     let response = request_reset(&app, "nobody@example.com").await;
     assert_eq!(response.status, StatusCode::ACCEPTED);
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    app.settle().await;
     assert!(app.email.sent().is_empty());
 }
 

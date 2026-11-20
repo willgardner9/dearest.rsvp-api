@@ -1,7 +1,5 @@
 mod common;
 
-use std::time::Duration;
-
 use axum::http::{Method, StatusCode};
 use common::{TestApp, TestResponse};
 use dearest::{auth::token::new_token, email::templates::extract_token};
@@ -37,19 +35,19 @@ async fn invite(app: &TestApp, cookie: &str, tenant: Uuid, email: &str) -> TestR
 
 /// Wait for `count` invite emails to `to`. Return the token in the last one.
 async fn invite_token(app: &TestApp, to: &str, count: usize) -> String {
-    for _ in 0..100 {
-        let emails: Vec<_> = app
-            .email
-            .sent()
-            .into_iter()
-            .filter(|email| email.to == to && email.subject.contains("invited you"))
-            .collect();
-        if emails.len() >= count {
-            return extract_token(emails.last().unwrap());
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    panic!("expected {count} invite emails to {to}");
+    app.settle().await;
+    let emails: Vec<_> = app
+        .email
+        .sent()
+        .into_iter()
+        .filter(|email| email.to == to && email.subject.contains("invited you"))
+        .collect();
+    assert!(
+        emails.len() >= count,
+        "expected {count} invite emails to {to}, got {}",
+        emails.len()
+    );
+    extract_token(emails.last().unwrap())
 }
 
 async fn preview(app: &TestApp, token: &str) -> TestResponse {
@@ -103,12 +101,7 @@ async fn invite_sends_email_with_link() {
     assert_eq!(response.body["email"], GUEST);
     assert!(response.body["id"].is_string());
     assert!(response.body["expires_at"].is_string());
-    for _ in 0..100 {
-        if s.app.email.last_to(GUEST).is_some() {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
+    s.app.settle().await;
     let email = s.app.email.last_to(GUEST).unwrap();
     assert!(email.text.contains("https://app.test/invite/"));
     assert!(email.subject.contains("Alex"));

@@ -1,7 +1,5 @@
 mod common;
 
-use std::time::Duration;
-
 use axum::http::{Method, StatusCode};
 use common::{TestApp, TestResponse};
 use serde_json::json;
@@ -140,15 +138,8 @@ async fn reset_email_limit_still_returns_202() {
             .filter(|email| email.subject == "Reset your Dearest password")
             .count()
     };
-    // The send runs on a background task. Wait until the 3 allowed emails arrive.
-    for _ in 0..500 {
-        if count_resets() >= 3 {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    // Wait a short time more, so a 4th email (the bug) has time to arrive.
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // Wait for the background sends. After that, a 4th email (the bug) would show.
+    app.settle().await;
     assert_eq!(count_resets(), 3);
 }
 

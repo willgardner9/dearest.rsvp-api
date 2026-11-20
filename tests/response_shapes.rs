@@ -3,8 +3,6 @@
 //! An id and a date have a random value. The helpers check the format and replace the value.
 mod common;
 
-use std::time::Duration;
-
 use axum::http::{Method, StatusCode};
 use chrono::DateTime;
 use common::{TestApp, TestResponse};
@@ -67,18 +65,14 @@ async fn invite(app: &TestApp, cookie: &str, tenant: Uuid, email: &str) -> TestR
 }
 
 async fn invite_token(app: &TestApp, to: &str) -> String {
-    for _ in 0..100 {
-        if let Some(email) = app
-            .email
-            .sent()
-            .into_iter()
-            .find(|email| email.to == to && email.subject.contains("invited you"))
-        {
-            return extract_token(&email);
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    panic!("no invite email to {to}");
+    app.settle().await;
+    let email = app
+        .email
+        .sent()
+        .into_iter()
+        .find(|email| email.to == to && email.subject.contains("invited you"))
+        .unwrap_or_else(|| panic!("no invite email to {to}"));
+    extract_token(&email)
 }
 
 #[tokio::test]

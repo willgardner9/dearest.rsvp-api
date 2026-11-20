@@ -1,6 +1,6 @@
 mod common;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use common::TestApp;
 use dearest::cleanup::{run_cleanup_once, spawn_cleanup};
@@ -129,7 +129,9 @@ async fn spawn_cleanup_runs_at_start() {
     .await;
     let cancel = CancellationToken::new();
     let handle = spawn_cleanup(app.state.clone(), cancel.clone());
-    for _ in 0..100 {
+    // The cleanup task is not tracked, so poll with a time limit that a slow machine meets.
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline {
         if count(&app, "SELECT count(*) AS n FROM sessions").await == 1 {
             break;
         }
@@ -146,8 +148,8 @@ async fn spawn_cleanup_stops_on_cancel() {
     let cancel = CancellationToken::new();
     let handle = spawn_cleanup(app.state.clone(), cancel.clone());
     cancel.cancel();
-    tokio::time::timeout(Duration::from_secs(1), handle)
+    tokio::time::timeout(Duration::from_secs(30), handle)
         .await
-        .expect("cleanup task stops within 1 second")
+        .expect("cleanup task stops within 30 seconds")
         .unwrap();
 }

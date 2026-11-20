@@ -177,15 +177,23 @@ impl TestApp {
         }
     }
 
-    /// Wait up to 1 second for a message to `to`. The send runs on a spawned task.
+    /// Wait until every background task has finished, for example an email send.
+    /// This does not depend on timing, so a slow machine cannot make a test fail.
+    /// It also makes a "nothing was sent" check exact.
+    pub async fn settle(&self) {
+        self.state.tasks.close();
+        tokio::time::timeout(Duration::from_secs(30), self.state.tasks.wait())
+            .await
+            .expect("background tasks finish within 30 seconds");
+        self.state.tasks.reopen();
+    }
+
+    /// Return the last message to `to`, after all background sends finish.
     pub async fn wait_for_email(&self, to: &str) -> Email {
-        for _ in 0..100 {
-            if let Some(email) = self.email.last_to(to) {
-                return email;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-        panic!("no email to {to} within 1 second");
+        self.settle().await;
+        self.email
+            .last_to(to)
+            .unwrap_or_else(|| panic!("no email to {to}"))
     }
 }
 
@@ -209,15 +217,15 @@ impl TestApp {
             .await;
         let cookie = response.session_cookie().expect("signup sets a cookie");
         let to = email.trim().to_lowercase();
-        // The address can already have an invite email, so wait for the verification email.
-        let mut message = self.wait_for_email(&to).await;
-        for _ in 0..100 {
-            if message.text.contains("/verify-email/confirm") {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-            message = self.wait_for_email(&to).await;
-        }
+        // The address can already have an invite email, so find the verification email.
+        self.settle().await;
+        let message = self
+            .email
+            .sent()
+            .into_iter()
+            .rev()
+            .find(|email| email.to == to && email.text.contains("/verify-email/confirm"))
+            .unwrap_or_else(|| panic!("no verification email to {to}"));
         let token = dearest::email::templates::extract_token(&message);
         let verified = self
             .request(

@@ -15,7 +15,8 @@ step is optional. A couple does the steps that fit them.
 
 - **Add your events.** The ceremony, the reception, the golf the day after.
 - **Build your website.** Put the wedding details online, with a security
-  level (see [Site security](#site-security)).
+  level (see [Site security](#site-security)) and an address (see
+  [Website address](#website-address)).
 
 **Your guests**
 
@@ -91,6 +92,19 @@ The product contacts guests and parties by:
 
 - email
 - WhatsApp
+
+## Website address
+
+Each wedding website has an address of the form `dearest.rsvp/to/<slug>`,
+for example `dearest.rsvp/to/alex-and-sam`.
+
+- The couple chooses the slug in the website setup.
+- A slug is unique across all weddings.
+- The app header shows the logo and `/to/<slug>` on every page, so a
+  wedding planner with many weddings always sees which wedding is open.
+- Until the couple chooses a slug, the app makes one from the wedding
+  name: lower case, `&` becomes `and`, accents are removed and other
+  characters become one `-`. The API does not store a slug yet.
 
 ## Site security
 

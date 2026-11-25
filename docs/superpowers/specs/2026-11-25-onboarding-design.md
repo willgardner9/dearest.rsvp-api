@@ -1,6 +1,6 @@
 # Onboarding: design
 
-Date: 2026-11-25
+Date: 2026-11-25 (updated the same day: six steps in three groups)
 Repositories: `dearest.rsvp-web` (frontend only)
 Related: [Product vision](../../product/vision.md)
 
@@ -10,16 +10,22 @@ Onboarding must orient a new couple and teach them what the product does.
 Today onboarding only creates the tenant. The couple types a wedding name,
 and the app sends them to a home page that says "More is coming soon."
 
-After this work, the wedding home page explains the three optional steps:
-guest list, save the dates and RSVP. It also shows the example paths that
-couples follow. The couple understands the product before the features
-exist, and each feature has a place to go when it ships.
+After this work, the wedding home page explains the six optional steps in
+three groups. It also shows the example paths that couples follow. The
+couple understands the product before the features exist, and each
+feature has a place to go when it ships.
+
+The steps form a graph, not a sequence. A few steps depend on others, and
+a couple can start at any step. For example, a couple can put a website up
+quickly and do the rest later, or send save the dates before they finalise
+the events. So the guide groups the steps and does not number them.
 
 ## Goals
 
-- A new couple learns the three optional steps and the example paths.
-- The couple learns that RSVP has a site security choice (open, password
-  or PIN) before they get to it.
+- A new couple learns the six optional steps, their dependencies and the
+  example paths.
+- The couple learns that the website has a security choice (open,
+  password or PIN) before they get to it.
 - Every member of a wedding sees the same guide. This includes an invited
   partner or planner.
 - Each step has one place on the home page. A future feature replaces the
@@ -34,12 +40,14 @@ exist, and each feature has a place to go when it ships.
   the answer could change, and a web-only answer is lost on another device.
 - No "done" state for a step and no way to hide the guide. Both need data
   that does not exist yet.
+- No enforcement of dependencies. The guide only states them.
 
 ## Anti-goals
 
 The work is a failure, even if it works, if one of these is true:
 
-- The couple thinks they must do all three steps.
+- The couple thinks they must do all six steps.
+- The couple thinks the steps have a fixed order.
 - The couple thinks a feature works today when it does not.
 - The guide stores state in `localStorage` or another place that the API
   will replace later.
@@ -49,8 +57,13 @@ The work is a failure, even if it works, if one of these is true:
 | Approach | Summary | Result |
 | --- | --- | --- |
 | A. Overview screen | One extra screen after the name form. The couple sees it once. | Rejected. The explanation is lost after the first visit. |
-| B. Step-by-step tour | One screen each for guest list, save the dates, RSVP and site security. | Rejected. Too much to read before the couple gets in. |
+| B. Step-by-step tour | One screen for each step. | Rejected. Too much to read before the couple gets in. |
 | C. Guide on the home page | No extra screen. The home page holds the guide. | **Picked.** The couple sees it on each visit. Each card becomes a link when its feature ships. |
+
+Inside approach C, the steps were first a numbered list. That was rejected,
+because a couple can start at any step and the order changes from couple to
+couple. The steps are now in groups, with no order inside or between the
+groups.
 
 ## Design
 
@@ -69,44 +82,50 @@ wedding gets the same guide.
 
 ### `WeddingGuide` content
 
-All content is static. The component uses no state, no API call and no
-`localStorage`.
+All content is static. The component uses no state other than the
+"Example paths" toggle, no API call and no `localStorage`.
 
-- **Intro line:** "Each step is optional. Do the ones that fit you."
-- **Three step cards.** Each card has a title, a one-line explanation and
-  a "Coming soon" badge:
-  1. **Build your guest list.** Import your guests, or send a
-     contact-details form that anyone can fill in. You then sort the
-     replies into your guest list.
-  2. **Send save the dates.** Guests do not need to reply. Send them by
-     email or WhatsApp.
-  3. **Collect RSVPs.** Guests reply for each event. You choose the site
-     security: open, password or PIN. PIN is recommended.
+- **Intro line:** "Each step is optional. Start with whichever fits you."
+- **Three groups, each with two step cards.** Each card has a title, a
+  one-line explanation, an optional "Needs" line and a "Coming soon" badge.
+
+| Group | Step | Explanation | Needs |
+| --- | --- | --- | --- |
+| Your wedding | Add your events | The ceremony, the reception, the golf the day after. | — |
+| Your wedding | Build your website | Put your details online. Choose open, password or PIN. PIN is recommended. | — |
+| Your guests | Build your guest list | Import your guests, or collect their contact details with a form. | — |
+| Your guests | Build your RSVPs | Questions such as meal choice and dietary needs, and who is invited to which event. | Events, guest list |
+| Messages to your guests | Send save the dates | Guests do not need to reply. Send by email or WhatsApp. | Guest list |
+| Messages to your guests | Send RSVP requests | Guests reply on your website for each event. | RSVPs, website |
+
 - **"Example paths" section.** It is collapsed by default and opens on a
   click. It shows:
-  - Import guests, then send RSVPs.
-  - Import guests, send save the dates, then send RSVPs months later.
-  - Collect contact details, send save the dates, then send RSVPs.
+  - Put up a website first, then do the rest later.
+  - Import guests, then send RSVP requests.
+  - Import guests, send save the dates, then send RSVP requests months later.
+  - Collect contact details, send save the dates, then send RSVP requests.
 
 ### Text sketch
 
 ```
 Will & Julia
 
-Each step is optional. Do the ones that fit you.
+Each step is optional. Start with whichever fits you.
 
-┌──────────────────────────────────────────────┐
-│ Build your guest list            Coming soon │
-│ Import guests, or collect their details.     │
-└──────────────────────────────────────────────┘
-┌──────────────────────────────────────────────┐
-│ Send save the dates              Coming soon │
-│ No reply needed. Email or WhatsApp.          │
-└──────────────────────────────────────────────┘
-┌──────────────────────────────────────────────┐
-│ Collect RSVPs                    Coming soon │
-│ Choose open, password or PIN (recommended).  │
-└──────────────────────────────────────────────┘
+Your wedding
+  Add your events                                Coming soon
+  Build your website                             Coming soon
+
+Your guests
+  Build your guest list                          Coming soon
+  Build your RSVPs                               Coming soon
+    Needs: events, guest list
+
+Messages to your guests
+  Send save the dates                            Coming soon
+    Needs: guest list
+  Send RSVP requests                             Coming soon
+    Needs: RSVPs, website
 
 ▸ See example paths
 ```
@@ -116,7 +135,6 @@ Each step is optional. Do the ones that fit you.
 These are the builder's calls:
 
 - The exact wording of each card. Keep the meaning above.
-- The Mantine components for the cards, the badge and the collapsible
-  section.
+- The Mantine components for the groups, the cards, the badge and the
+  collapsible section.
 - The test approach for the new component.
-- Add `.superpowers/` to the `.gitignore` of `dearest.rsvp-web`.

@@ -7,31 +7,64 @@ Each feature gets its own design in `docs/superpowers/specs/`.
 
 ## What the product does
 
-Dearest helps a couple manage the outbound communication for their
-wedding. There are three steps. Each step is optional. A couple does the
-steps that fit them.
+Dearest helps a couple set up their wedding and manage the outbound
+communication to their guests. There are six steps in three groups. Each
+step is optional. A couple does the steps that fit them.
 
-1. **Build the guest list.** Import guests, or collect contact details
-   with a form.
-2. **Send save the dates.** Tell guests the date early.
-3. **Collect RSVPs.** Guests say which events they will go to.
+**Your wedding**
+
+- **Add your events.** The ceremony, the reception, the golf the day after.
+- **Build your website.** Put the wedding details online, with a security
+  level (see [Site security](#site-security)).
+
+**Your guests**
+
+- **Build your guest list.** Import guests, or collect contact details
+  with a form.
+- **Build your RSVPs.** The questions that guests answer, such as meal
+  choice and dietary needs, and which people are invited to which event.
+
+**Messages to your guests**
+
+- **Send save the dates.** Tell guests the date early. No reply needed.
+- **Send RSVP requests.** Guests reply on the website for each event.
+
+## Step dependencies
+
+The steps are a graph, not a sequence. A couple can start at any step. An
+arrow means "needs".
+
+```mermaid
+flowchart RL
+    rsvps[Build your RSVPs] --> events[Add your events]
+    rsvps --> guests[Build your guest list]
+    std[Send save the dates] --> guests
+    requests[Send RSVP requests] --> rsvps
+    requests --> website[Build your website]
+```
+
+`Add your events`, `Build your website` and `Build your guest list` need
+nothing. A couple can send save the dates before they finalise the events.
 
 ## Example paths
 
 ```mermaid
 flowchart LR
-    start([New wedding]) --> import[Import guests]
+    start([New wedding]) --> web[Build website]
+    start --> import[Import guests]
     start --> collect[Collect contact details]
     collect --> sort[Sort replies into guest list]
     sort --> std
-    import --> rsvp[Send RSVPs]
+    import --> rsvp[Send RSVP requests]
     import --> std[Send save the dates]
     std -->|months later| rsvp
+    web -.->|later| rest[Everything else]
 ```
 
-- Import guests, then send RSVPs.
-- Import guests, send save the dates, then send RSVPs months later.
-- Collect contact details, send save the dates, then send RSVPs.
+- Put up a website first, then do the rest later.
+- Import guests, then send RSVP requests.
+- Import guests, send save the dates, then send RSVP requests months later.
+- Collect contact details, send save the dates, then send RSVP requests.
 
 ## Core concepts
 

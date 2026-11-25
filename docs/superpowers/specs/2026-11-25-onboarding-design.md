@@ -1,6 +1,6 @@
 # Onboarding: design
 
-Date: 2026-11-25 (updated the same day: six steps in three groups)
+Date: 2026-11-25 (updated: five steps in three groups)
 Repositories: `dearest.rsvp-web` (frontend only)
 Related: [Product vision](../../product/vision.md)
 
@@ -10,7 +10,7 @@ Onboarding must orient a new couple and teach them what the product does.
 Today onboarding only creates the tenant. The couple types a wedding name,
 and the app sends them to a home page that says "More is coming soon."
 
-After this work, the wedding home page explains the six optional steps in
+After this work, the wedding home page explains the five optional steps in
 three groups. It also shows the example paths that couples follow. The
 couple understands the product before the features exist, and each
 feature has a place to go when it ships.
@@ -22,7 +22,7 @@ the events. So the guide groups the steps and does not number them.
 
 ## Goals
 
-- A new couple learns the six optional steps, their dependencies and the
+- A new couple learns the five optional steps, their dependencies and the
   example paths.
 - The couple learns that the website has a security choice (open,
   password or PIN) before they get to it.
@@ -46,7 +46,7 @@ the events. So the guide groups the steps and does not number them.
 
 The work is a failure, even if it works, if one of these is true:
 
-- The couple thinks they must do all six steps.
+- The couple thinks they must do all five steps.
 - The couple thinks the steps have a fixed order.
 - The couple thinks a feature works today when it does not.
 - The guide stores state in `localStorage` or another place that the API
@@ -86,17 +86,22 @@ All content is static. The component uses no state other than the
 "Example paths" toggle, no API call and no `localStorage`.
 
 - **Intro line:** "Each step is optional. Start with whichever fits you."
-- **Three groups, each with two step cards.** Each card has a title, a
+- **Three groups of step cards.** Each card has a title, a
   one-line explanation, an optional "Needs" line and a "Coming soon" badge.
 
 | Group | Step | Explanation | Needs |
 | --- | --- | --- | --- |
-| Your wedding | Add your events | The ceremony, the reception, the golf the day after. | — |
+| Your wedding | Add your events | The ceremony, the reception, the golf the day after, and the questions guests answer, such as meal choice and dietary needs. | — |
 | Your wedding | Build your website | Put your details online. Choose open, password or PIN. PIN is recommended. | — |
-| Your guests | Build your guest list | Import your guests, or collect their contact details with a form. | — |
-| Your guests | Build your RSVPs | Questions such as meal choice and dietary needs, and who is invited to which event. | Events, guest list |
+| Your guests | Build your guest list | Import your guests, or collect their contact details with a form. Choose who is invited to which event, and see their replies. | — |
 | Messages to your guests | Send save the dates | Guests do not need to reply. Send by email or WhatsApp. | Guest list |
-| Messages to your guests | Send RSVP requests | Guests reply on your website for each event. | RSVPs, website |
+| Messages to your guests | Send RSVP requests | Ask guests to reply on your website for each event, and remind the ones who have not. | Events, guest list, website |
+
+An earlier version had a separate "Build your RSVPs" step. It was removed,
+because the RSVP questions belong to an event (a meal choice applies to the
+dinner, not to the golf), and who is invited to which event belongs to the
+guest list. The replies show in the guest list. The "Send RSVP requests"
+page only sends the requests and the reminders.
 
 - **"Example paths" section.** It is collapsed by default and opens on a
   click. It shows:
@@ -118,14 +123,12 @@ Your wedding
 
 Your guests
   Build your guest list                          Coming soon
-  Build your RSVPs                               Coming soon
-    Needs: events, guest list
 
 Messages to your guests
   Send save the dates                            Coming soon
     Needs: guest list
   Send RSVP requests                             Coming soon
-    Needs: RSVPs, website
+    Needs: events, guest list, website
 
 ▸ See example paths
 ```

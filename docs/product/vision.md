@@ -8,12 +8,14 @@ Each feature gets its own design in `docs/superpowers/specs/`.
 ## What the product does
 
 Dearest helps a couple set up their wedding and manage the outbound
-communication to their guests. There are six steps in three groups. Each
+communication to their guests. There are five steps in three groups. Each
 step is optional. A couple does the steps that fit them.
 
 **Your wedding**
 
 - **Add your events.** The ceremony, the reception, the golf the day after.
+  Each event has its own RSVP questions, such as meal choice and dietary
+  needs.
 - **Build your website.** Put the wedding details online, with a security
   level (see [Site security](#site-security)) and an address (see
   [Website address](#website-address)).
@@ -21,14 +23,14 @@ step is optional. A couple does the steps that fit them.
 **Your guests**
 
 - **Build your guest list.** Import guests, or collect contact details
-  with a form.
-- **Build your RSVPs.** The questions that guests answer, such as meal
-  choice and dietary needs, and which people are invited to which event.
+  with a form. Choose which people are invited to which event. The RSVP
+  replies show here, next to each person.
 
 **Messages to your guests**
 
 - **Send save the dates.** Tell guests the date early. No reply needed.
-- **Send RSVP requests.** Guests reply on the website for each event.
+- **Send RSVP requests.** Ask guests to reply on the website for each
+  event, and remind the ones who have not replied.
 
 ## Step dependencies
 
@@ -37,10 +39,9 @@ arrow means "needs".
 
 ```mermaid
 flowchart RL
-    rsvps[Build your RSVPs] --> events[Add your events]
-    rsvps --> guests[Build your guest list]
-    std[Send save the dates] --> guests
-    requests[Send RSVP requests] --> rsvps
+    std[Send save the dates] --> guests[Build your guest list]
+    requests[Send RSVP requests] --> events[Add your events]
+    requests --> guests
     requests --> website[Build your website]
 ```
 

@@ -11,7 +11,7 @@ Today onboarding only creates the tenant. The couple types a wedding name,
 and the app sends them to a home page that says "More is coming soon."
 
 After this work, the wedding home page explains the five optional steps in
-three groups. It also shows the example paths that couples follow. The
+three groups. The
 couple understands the product before the features exist, and each
 feature has a place to go when it ships.
 
@@ -22,8 +22,7 @@ the events. So the guide groups the steps and does not number them.
 
 ## Goals
 
-- A new couple learns the five optional steps, their dependencies and the
-  example paths.
+- A new couple learns the five steps and their dependencies.
 - The couple learns that the website has a security choice (open,
   password or PIN) before they get to it.
 - Every member of a wedding sees the same guide. This includes an invited
@@ -74,18 +73,19 @@ groups.
 2. `/onboarding` stays as it is. It shows the "Wedding name" form
    (`WeddingNameForm`), calls `createTenant` and sends the user to
    `/w/$tenantId`.
-3. `WeddingHomePage` shows the wedding name. A new `WeddingGuide`
-   component replaces the text "More is coming soon."
+3. `WeddingHomePage` shows only a new `WeddingGuide` component in place of
+   the text "More is coming soon." The wedding name moves to the header
+   (see App shell).
 
 `NewWeddingPage` uses the same form and the same redirect, so a second
 wedding gets the same guide.
 
 ### `WeddingGuide` content
 
-All content is static. The component uses no state other than the
-"Example paths" toggle, no API call and no `localStorage`.
+All content is static. The component uses no state, no API call and no
+`localStorage`. It has no intro line and no example paths: the cards and
+the groups must speak for themselves.
 
-- **Intro line:** "Each step is optional. Start with whichever fits you."
 - **Three groups of step cards.** Each card has a title, a
   one-line explanation, an optional "Needs" line and a "Coming soon" badge.
 
@@ -103,19 +103,10 @@ dinner, not to the golf), and who is invited to which event belongs to the
 guest list. The replies show in the guest list. The "Send RSVP requests"
 page only sends the requests and the reminders.
 
-- **"Example paths" section.** It is collapsed by default and opens on a
-  click. It shows:
-  - Put up a website first, then do the rest later.
-  - Import guests, then send RSVP requests.
-  - Import guests, send save the dates, then send RSVP requests months later.
-  - Collect contact details, send save the dates, then send RSVP requests.
-
 ### Text sketch
 
 ```
-Will & Julia
-
-Each step is optional. Start with whichever fits you.
+dearest.rsvp | /to/will-and-julia
 
 Your wedding
   Add your events                                Coming soon
@@ -129,9 +120,16 @@ Messages to your guests
     Needs: guest list
   Send RSVP requests                             Coming soon
     Needs: events, guest list, website
-
-▸ See example paths
 ```
+
+### App shell
+
+- **Header:** the logo, then the website address `/to/<slug>`. A planner
+  with many weddings sees which wedding is open. Until the couple chooses a
+  slug, the app makes one from the wedding name (see the product vision).
+- **Navigation:** the five steps, under the group names Wedding, Guests and
+  Messages, as disabled items with a "Soon" badge. They read the same data
+  as the guide, so the two always match.
 
 ## Left to the builder
 

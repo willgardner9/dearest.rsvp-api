@@ -2,10 +2,12 @@ name: CI
 
 # Pull requests run the checks. Pushes to main only publish the image.
 # A pull request must pass before merge, so main does not run the tests again.
+# The pull request trigger has no path filter. A path filter stops the whole
+# workflow, and a required check then waits for ever. The "changes" job runs on
+# each pull request and skips the code checks when only Markdown files change.
+# GitHub counts a skipped job as a pass for a required check.
 on:
   pull_request:
-    paths-ignore:
-      - "**.md"
   push:
     branches: [main]
     paths-ignore:
@@ -20,9 +22,32 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  changes:
+    name: Find changed files
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - id: filter
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          files=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --paginate --jq '.[].filename')
+          echo "$files"
+          if echo "$files" | grep -qv '\.md$'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "Only Markdown files changed. Skip the code checks."
+          fi
+
   check:
     name: Format, lint, test
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -51,7 +76,8 @@ jobs:
 
   docker:
     name: Docker build
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
